@@ -1,3 +1,6 @@
 fastapi
 pyspark
 dotenv
+scikit-learn
+pandas
+numpy

@@ -4,10 +4,11 @@ import os, logging
 
 logging.basicConfig(level=logging.INFO)
 
-def main():
+def main() -> SparkSession:
     # Initialize Spark session
     load_dotenv()
     ds_path = os.getenv("DATASET_PATH")
+
     spark = (
         SparkSession.builder
         .appName("VitalSignsProject")
@@ -21,6 +22,8 @@ def main():
     logging.info("First 5 rows of the dataset:")
     df.show(5)
 
+    return spark
+
 if __name__ == "__main__":
     logging.info("Starting Vital Signs Analysis Application")
-    main()
+    session = main()
