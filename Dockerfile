@@ -17,4 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "src/main.py"]
+CMD ["fastapi", "run", "src/main.py", "--port", "8081"]
