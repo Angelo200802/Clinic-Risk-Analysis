@@ -11,6 +11,8 @@ def get_session() -> SparkSession:
         SparkSession.builder
         .appName("VitalSignsProject")
         .master("local[*]")
+        .config("spark.driver.memory", "4g")    # Assegna 4GB al driver
+        .config("spark.executor.memory", "4g")  # Assegna 4GB agli esecutori
         .config("spark.hadoop.fs.defaultFS", "file:///")
         .getOrCreate()
     )
