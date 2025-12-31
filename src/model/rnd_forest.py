@@ -1,5 +1,5 @@
 from src.spark_manager import get_session, load_dataset
-from src.model.logistic_reg import indexer_gender, indexer_risk, assembler, fit
+from src.model.logistic_reg import indexer_gender, indexer_risk, assembler, evaluate_model, fit
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.classification import RandomForestClassifier
@@ -8,10 +8,11 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-ds_path = os.getenv("DATASET_PATH")
+DS_PATH = os.getenv("DATASET_PATH")
+SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
 
 spark = get_session()   
-ds = load_dataset(spark, ds_path)
+ds = load_dataset(spark, DS_PATH)
 
 rf_clf = RandomForestClassifier(labelCol="RiskCategory_b", featuresCol="features", seed=42)
 
@@ -37,8 +38,10 @@ cv = CrossValidator(
 if __name__ == "__main__":
     train, test = ds.randomSplit([0.7, 0.3], seed=42)
     #fit(cv,train,test,"RiskCategory_b","Random Forest Classifier")
-    model = PipelineModel.load("random_forest_pipeline_model")
-    print(f"Numero di alberi (numTrees): {model.stages[-1].getNumTrees}")
-    print(f"Profondità massima (maxDepth): {model.stages[-1].getOrDefault('maxDepth')}")
-    print(f"Criterio di impurità (impurity): {model.stages[-1].getOrDefault('impurity')}")
-    print(f"Seme casuale (seed): {model.stages[-1].getOrDefault('seed')}")
+    model = PipelineModel.load("./src/model/saved_models/random_forest_pipeline_model")
+    importances = model.stages[-1].featureImportances
+    # Se l'ID è nella lista, vedrai qualcosa del genere:
+    for i, column in enumerate(assembler.getInputCols()):
+        print(f"Feature: {column:20} Importance: {importances[i]:.4f}")
+    predictions = model.transform(test)
+    evaluate_model(predictions,"RiskCategory_b")
