@@ -56,7 +56,7 @@ pipe = Pipeline(stages=[indexer_gender, indexer_risk, assembler,scaler,assembler
 
 paramGrid = (ParamGridBuilder()
              .addGrid(lr.regParam, [0.0001,0.001,0.01,0.1,1])#[i for i in np.arange(0,0.11,0.01)])
-             .addGrid(lr.elasticNetParam, [0.0,0.5,0.9])#[i for i in np.arange(0,1.1,0.1)]) 
+             .addGrid(lr.elasticNetParam, [0.0,0.5,0.9,1])#[i for i in np.arange(0,1.1,0.1)]) 
              .addGrid(lr.maxIter, [10,100,1000])#[i for i in range(0,100,10)])               
              .build())
 
@@ -112,8 +112,8 @@ def fit(cv:CrossValidator,train,save:bool = True,path = ""):
 
 if __name__ == "__main__":
     train, test = ds.randomSplit([0.7, 0.3], seed=42)
-    #model = fit(cv,train,path="./src/model/saved_models/log_reg")
-    model = PipelineModel.load("./src/model/saved_models/log_reg_pipeline")
+    model = fit(cv,train,path="./src/model/saved_models/log_reg2")
+    #model = PipelineModel.load("./src/model/saved_models/log_reg_pipeline")
     
     predictions = model.transform(test)
     predictions.groupBy("RiskCategory_b", "prediction").count().show()
