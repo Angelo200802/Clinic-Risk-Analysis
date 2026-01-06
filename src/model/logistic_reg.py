@@ -1,19 +1,18 @@
 from pyspark.ml.feature import StandardScaler
-from src.spark_manager import get_session, load_dataset
+from src.spark_manager import load_dataset
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.feature import VectorAssembler, StringIndexer, PolynomialExpansion
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.ml.classification import LogisticRegression
-from pyspark.ml import Pipeline, PipelineModel
+from pyspark.ml import Pipeline
 from dotenv import load_dotenv
-import os, logging, numpy as np
+import os, logging
 
 load_dotenv()
 DS_PATH = os.getenv("DATASET_PATH")
 SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
-
-spark = get_session()   
-ds = load_dataset(spark, DS_PATH)
+   
+ds = load_dataset(DS_PATH)
 
 polyExpansion = PolynomialExpansion(
     degree=2, 

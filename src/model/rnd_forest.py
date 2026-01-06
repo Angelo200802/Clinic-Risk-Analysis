@@ -1,9 +1,9 @@
-from src.spark_manager import get_session, load_dataset
+from src.spark_manager import load_dataset
 from src.model.logistic_reg import indexer_gender, scaler,indexer_risk, evaluate_model, fit
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.classification import RandomForestClassifier
-from pyspark.ml import Pipeline, PipelineModel
+from pyspark.ml import Pipeline
 from pyspark.ml.feature import Bucketizer, VectorAssembler
 from dotenv import load_dotenv
 import os, matplotlib.pyplot as plt, seaborn as sns, pandas as pd
@@ -11,9 +11,8 @@ import os, matplotlib.pyplot as plt, seaborn as sns, pandas as pd
 load_dotenv()
 DS_PATH = os.getenv("DATASET_PATH")
 SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
-
-spark = get_session()   
-ds = load_dataset(spark, DS_PATH)
+   
+ds = load_dataset(DS_PATH)
 
 bmi_buckets = [-float("inf"), 18.5, 25.0, 30.0, float("inf")]   
 bmi_bucketizer = Bucketizer(

@@ -19,8 +19,8 @@ def get_session() -> SparkSession:
 
     return _spark
 
-def load_dataset(spark: SparkSession, ds_path: str):
+def load_dataset(ds_path: str):
     logging.info(f"Loading dataset from: {ds_path}")
-    df = spark.read.csv(ds_path, header=True, inferSchema=True)
+    df = _spark.read.csv(ds_path, header=True, inferSchema=True)
     
     return df

@@ -1,5 +1,5 @@
 from .logistic_reg import indexer_gender, indexer_risk, evaluate_model, fit
-from src.spark_manager import get_session, load_dataset
+from src.spark_manager import load_dataset
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml import Pipeline
@@ -76,8 +76,7 @@ if __name__ == "__main__":
     DS_PATH = os.getenv("DATASET_PATH")
     SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
     
-    spark = get_session()   
-    ds = load_dataset(spark, DS_PATH)
+    ds = load_dataset(DS_PATH)
     
     # Split dei dati
     train, test = ds.randomSplit([0.7, 0.3], seed=42)

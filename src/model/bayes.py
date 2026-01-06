@@ -1,5 +1,5 @@
 from .logistic_reg import indexer_gender, indexer_risk, evaluate_model, fit
-from src.spark_manager import get_session, load_dataset
+from src.spark_manager import load_dataset
 from pyspark.ml.classification import NaiveBayes
 from pyspark.ml.feature import MinMaxScaler, VectorAssembler
 from pyspark.ml import Pipeline
@@ -62,9 +62,8 @@ cv_nb = CrossValidator(
 if __name__ == "__main__":
     load_dotenv()
     DS_PATH = os.getenv("DATASET_PATH")
-    SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
-    spark = get_session()   
-    ds = load_dataset(spark, DS_PATH)
+    SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH") 
+    ds = load_dataset(DS_PATH)
     train, test = ds.randomSplit([0.7, 0.3], seed=42)
     model = fit(cv_nb, train,path=SAVE_MODEL_PATH+"/nb")
     predictions = model.transform(test)
