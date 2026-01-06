@@ -2,7 +2,7 @@ from .logistic_reg import indexer_gender, indexer_risk, evaluate_model, fit
 from src.spark_manager import load_dataset
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.feature import VectorAssembler, StandardScaler
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, PipelineModel
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 import os
@@ -28,7 +28,7 @@ scaler = StandardScaler(
 assembler2 = VectorAssembler(
     inputCols=[
         "Heart Rate", "Respiratory Rate", "Body Temperature", 
-        "Oxygen Saturation", "Age", "Derived_HRV", "Derived_BMI",
+        "Oxygen Saturation", "Age", "Derived_HRV", 
         "Derived_Pulse_Pressure", "Derived_MAP", "Gender_b"],
     outputCol="last_features")
 
@@ -84,20 +84,30 @@ if __name__ == "__main__":
     print("Inizio addestramento ANN (Multilayer Perceptron)...")
     
     # Utilizzo della tua funzione fit per salvare il miglior modello
-    model_ann = fit(
-        cv=cv_ann, 
-        train=train, 
-        save=True, 
-        path=os.path.join(SAVE_MODEL_PATH, "ann_model")
-    )
+    #model_ann = fit(
+    #    cv=cv_ann, 
+    #    train=train, 
+    #    save=True, 
+    #    path=os.path.join(SAVE_MODEL_PATH, "ann_model")
+    #)
+
+    model_ann = PipelineModel.load(SAVE_MODEL_PATH+"/ann_model_pipeline")
     
     predictions = model_ann.transform(test) 
     predictions.groupBy("RiskCategory_b", "prediction").count().show()
     
     # Valutazione
     print("\n--- Risultati ANN ---")
-    evaluate_model(predictions, "RiskCategory_b")
-    
+    metrics = evaluate_model(predictions, "RiskCategory_b")
+    import json
+    with open(os.path.join(SAVE_MODEL_PATH, "metrics.json"), "r") as f:
+        met = json.load(f)
+        met["mlp"] = metrics
+        
+    f.close()
+    with open(SAVE_MODEL_PATH+"/metrics.json", "w") as f:    
+        json.dump(met, f, indent=4)
+    f.close()
     # Stampa dei layer scelti dalla Cross Validation
     best_layers = model_ann.stages[-1].getLayers()
     print(f"\nConfigurazione Layers ottimale: {best_layers}")

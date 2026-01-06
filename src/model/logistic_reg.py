@@ -4,9 +4,9 @@ from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.feature import VectorAssembler, StringIndexer, PolynomialExpansion
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.ml.classification import LogisticRegression
-from pyspark.ml import Pipeline
+from pyspark.ml import Pipeline, PipelineModel
 from dotenv import load_dotenv
-import os, logging
+import os, logging, json
 
 load_dotenv()
 DS_PATH = os.getenv("DATASET_PATH")
@@ -91,12 +91,20 @@ def evaluate_model(predictions,label):
     precision = evaluator.setMetricName("weightedPrecision").evaluate(predictions)
     recall = evaluator.setMetricName("weightedRecall").evaluate(predictions)
     f1 = evaluator.setMetricName("f1").evaluate(predictions)
+    auc_roc = evaluator.evaluate(predictions)
     evaluator = BinaryClassificationEvaluator(labelCol="RiskCategory_b",metricName="areaUnderROC")
     print(f"Accuracy: {accuracy}")
     print(f"Precision: {precision}")
     print(f"Recall: {recall}")
     print(f"F1 Score: {f1}")
-    print(f"AUC ROC: {evaluator.evaluate(predictions)}")
+    print(f"AUC ROC: {auc_roc}")
+    return {
+        "accuracy": accuracy, 
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "auc_roc": auc_roc
+    }
 
 def fit(cv:CrossValidator,train,save:bool = True,path = ""):
     model = cv.fit(train) 
@@ -111,12 +119,22 @@ def fit(cv:CrossValidator,train,save:bool = True,path = ""):
 
 if __name__ == "__main__":
     train, test = ds.randomSplit([0.7, 0.3], seed=42)
-    model = fit(cv,train,path="./src/model/saved_models/log_reg2")
-    #model = PipelineModel.load("./src/model/saved_models/log_reg_pipeline")
-    
+    #model = fit(cv,train,path="./src/model/saved_models/log_reg2")
+    model = PipelineModel.load(SAVE_MODEL_PATH+"/log_reg_pipeline")
+
     predictions = model.transform(test)
     predictions.groupBy("RiskCategory_b", "prediction").count().show()
-    evaluate_model(predictions,"RiskCategory_b")
+    metrics = evaluate_model(predictions,"RiskCategory_b")
+    
+    with open(os.path.join(SAVE_MODEL_PATH, "metrics.json"), "r") as f:
+        met = json.load(f)
+        met["logistic_regression"] = metrics
+        
+    f.close()
+    with open(SAVE_MODEL_PATH+"/metrics.json", "w") as f:    
+        json.dump(met, f, indent=4)
+    f.close()
+    
     feature_names = [col for col in ds.columns if col not in [ds.columns[-1],"Gender", "Timestamp", "Patient ID", "Height (m)", "Weight (kg)", "Systolic Blood Pressure", "Diastolic Blood Pressure"]]
     coefficients = model.stages[-1].coefficients.toArray()
     print(f"Intercetta: {model.stages[-1].intercept:.4f}")

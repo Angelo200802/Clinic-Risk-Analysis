@@ -20,6 +20,8 @@ def get_session() -> SparkSession:
     return _spark
 
 def load_dataset(ds_path: str):
+    if _spark is None:
+        get_session()
     logging.info(f"Loading dataset from: {ds_path}")
     df = _spark.read.csv(ds_path, header=True, inferSchema=True)
     
