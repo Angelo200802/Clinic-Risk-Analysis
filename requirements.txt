@@ -1,6 +1,7 @@
 fastapi[standard]
 pyspark
 dotenv
+redis
 scikit-learn
 pandas
 numpy
