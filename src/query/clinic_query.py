@@ -20,15 +20,15 @@ vital_signs = {
 
 def get_column_stats(df:DataFrame,column_name: str):
     
-    if column_name not in df.columns:
+    if column_name not in vital_signs.keys():
         return {"error": f"Column {column_name} does not exist in the DataFrame."}
     
     stats = df.select(
-        F.count(F.col(column_name)).alias("count"),
-        F.mean(F.col(column_name)).alias("mean"),
-        F.stddev(F.col(column_name)).alias("stddev"),
-        F.min(F.col(column_name)).alias("min"),
-        F.max(F.col(column_name)).alias("max"),
+        F.count(F.col(vital_signs[column_name])).alias("count"),
+        F.mean(F.col(vital_signs[column_name])).alias("mean"),
+        F.stddev(F.col(vital_signs[column_name])).alias("stddev"),
+        F.min(F.col(vital_signs[column_name])).alias("min"),
+        F.max(F.col(vital_signs[column_name])).alias("max"),
     ).first()
     
     return {

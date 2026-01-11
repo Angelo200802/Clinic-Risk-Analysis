@@ -33,19 +33,14 @@ class Ensemble:
         weighted_sum_expression = lit(0)
 
         for name, (model, weight) in self.models.items():
-            # 1. Applichiamo il modello
-            # Rinominiamo 'prediction' in 'pred_nomeModello' per evitare conflitti
             pred_col = f"pred_{name}"
             predictions = model.transform(raw_df) \
                                .select("Patient ID", col("prediction").alias(pred_col))
             
-            # 2. Uniamo i risultati al DataFrame principale
             ensemble_df = ensemble_df.join(predictions, on="Patient ID", how="inner")
             
-            # 3. Costruiamo dinamicamente l'espressione per la somma pesata
             weighted_sum_expression += (col(pred_col) * weight)
 
-        # 4. Calcoliamo il voto finale basato sulla soglia
         ensemble_df = ensemble_df.withColumn("weighted_score", weighted_sum_expression)
         
         final_df = ensemble_df.withColumn(
