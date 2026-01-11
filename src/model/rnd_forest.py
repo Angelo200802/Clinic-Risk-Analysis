@@ -1,5 +1,5 @@
-from src.spark_manager import load_dataset
-from src.model.logistic_reg import indexer_gender, scaler,indexer_risk, evaluate_model, fit
+from spark_manager import load_dataset
+from model.logistic_reg import indexer_gender, scaler,indexer_risk, evaluate_model, fit
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.classification import RandomForestClassifier

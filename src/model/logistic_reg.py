@@ -1,5 +1,5 @@
 from pyspark.ml.feature import StandardScaler
-from src.spark_manager import load_dataset
+from spark_manager import load_dataset
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.feature import VectorAssembler, StringIndexer, PolynomialExpansion
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator

@@ -1,5 +1,5 @@
 from .logistic_reg import indexer_gender, indexer_risk, evaluate_model, fit
-from src.spark_manager import load_dataset
+from spark_manager import load_dataset
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.feature import VectorAssembler, StandardScaler
 from pyspark.ml import Pipeline, PipelineModel
