@@ -45,7 +45,7 @@ class Ensemble:
         
         final_df = ensemble_df.withColumn(
             "ensemble_prediction",
-            when(col("weighted_score") > self.thresholds, 0.0).otherwise(1.0)
+            when(col("weighted_score") > self.thresholds, "Low Risk").otherwise("High Risk")
         )
 
         return final_df
