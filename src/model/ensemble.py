@@ -45,7 +45,16 @@ class Ensemble:
         
         final_df = ensemble_df.withColumn(
             "ensemble_prediction",
-            when(col("weighted_score") > self.thresholds, 1.0).otherwise(0.0)
+            when(col("weighted_score") > self.thresholds, 0.0).otherwise(1.0)
         )
 
         return final_df
+    
+    @staticmethod
+    def build() -> 'Ensemble':
+        models = {
+            "logistic_regression": os.getenv("SAVE_MODEL_PATH") + "/log_reg_pipeline",
+            "mlp": os.getenv("SAVE_MODEL_PATH") + "/ann_model_pipeline",
+            "naive_bayes": os.getenv("SAVE_MODEL_PATH") + "/nb_pipeline"
+        }
+        return Ensemble(models)

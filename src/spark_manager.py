@@ -2,6 +2,7 @@ from pyspark.sql import SparkSession
 import logging
 
 _spark = None
+_dataset = None
 
 def get_session() -> SparkSession:
 
@@ -22,7 +23,10 @@ def get_session() -> SparkSession:
 def load_dataset(ds_path: str):
     if _spark is None:
         get_session()
-    logging.info(f"Loading dataset from: {ds_path}")
-    df = _spark.read.csv(ds_path, header=True, inferSchema=True)
+
+    global _dataset
+    if not _dataset:
+        logging.info(f"Loading dataset from: {ds_path}")
+        _dataset = _spark.read.csv(ds_path, header=True, inferSchema=True)
     
-    return df
+    return _dataset

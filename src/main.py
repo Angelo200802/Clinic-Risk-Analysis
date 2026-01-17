@@ -1,11 +1,13 @@
 from fastapi import FastAPI
-from query.clinic_query import router
+from query.clinic_query import router_clinic_query
+from query.model_evaluation import router_model_ev
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
-app.include_router(router)
+app.include_router(router_clinic_query)
+app.include_router(router_model_ev)
 
 @app.get("/")
 def hello_world():
@@ -13,5 +15,5 @@ def hello_world():
 
 
 if __name__ == "__main__":
-    pass
+    logging.log(logging.INFO, "Starting Vital Signs Analysis Application...")
     

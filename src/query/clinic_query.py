@@ -1,21 +1,25 @@
 from fastapi import APIRouter, HTTPException
-from spark_manager import get_session, load_dataset
+from spark_manager import load_dataset
 from pyspark.sql import DataFrame, functions as F
 import os, logging
 from dotenv import load_dotenv
 
+logging.basicConfig(level=logging.INFO)
 load_dotenv()
 
 SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
 
-router = APIRouter()
+router_clinic_query = APIRouter()
 
-spark = get_session()
 ds : DataFrame = load_dataset(os.getenv("DATASET_PATH"))
 
-vital_signs = {
-    "heart_rate": "Heart Rate"
-}
+def get_columns():
+    col_dict : dict = {}
+    for col in ds.columns:
+        col_dict[col.replace(" ","_").lower()] = col
+    return col_dict
+
+vital_signs = get_columns()
 
 
 def get_column_stats(df:DataFrame,column_name: str):
@@ -39,7 +43,7 @@ def get_column_stats(df:DataFrame,column_name: str):
         "max": stats["max"],
     }
 
-@router.get("/stats/{signs}")
+@router_clinic_query.get("/stats/{signs}")
 def get_stats(signs:str):
     results = get_column_stats(ds, signs)
     
@@ -48,7 +52,7 @@ def get_stats(signs:str):
     
     return results
 
-@router.get("/clinic/shockindex")
+@router_clinic_query.get("/clinic/shockindex")
 def get_shock_index(order: str = "desc"):
     shock_df = ds \
         .withColumn("ShockIndex", F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
@@ -62,7 +66,7 @@ def get_shock_index(order: str = "desc"):
         "count": len(pd_shock),   
     }
 
-@router.get("/clinic/news2")
+@router_clinic_query.get("/clinic/news2")
 def get_news2():
 
     news_df = ds.withColumn(
@@ -110,7 +114,7 @@ def get_news2():
         "count": len(pd_news2)
     }
 
-@router.get("/clinic/differentialpressure")
+@router_clinic_query.get("/clinic/differentialpressure")
 def get_differential_pressure(order: str = "desc"):
     diff_pressure_df = ds \
         .withColumn("DifferentialPressure", F.col("Systolic Blood Pressure") - F.col("Diastolic Blood Pressure")) \
@@ -123,7 +127,7 @@ def get_differential_pressure(order: str = "desc"):
         "data": pd_diff_pressure.head(10).to_dict(orient="records") 
     }
 
-@router.get("/clinic/differentialpressure/filter/{label}")
+@router_clinic_query.get("/clinic/differentialpressure/filter/{label}")
 def filter_differential_pressure(label: str, order: str = "desc"):
     label = label.lower()
     diff_pressure_df = ds \
