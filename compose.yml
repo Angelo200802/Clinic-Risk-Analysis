@@ -3,7 +3,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: ./src/Dockerfile
     #environment:
     #  - APP_ENV=production
     #  - APP_DEBUG=false
@@ -11,3 +11,4 @@ services:
       - "8081:8081"
     volumes:
       - ./data:/app/data
+      - .:/app

@@ -85,14 +85,14 @@ def get_poly_feature_names(base_features, degree=2):
     
     return poly_names
 
-def evaluate_model(predictions,label):
-    evaluator = MulticlassClassificationEvaluator(labelCol=label, predictionCol="prediction")
+def evaluate_model(predictions,label,predict_label="Prediction"):
+    evaluator = MulticlassClassificationEvaluator(labelCol=label, predictionCol=predict_label)
     accuracy = evaluator.setMetricName("accuracy").evaluate(predictions)
     precision = evaluator.setMetricName("weightedPrecision").evaluate(predictions)
     recall = evaluator.setMetricName("weightedRecall").evaluate(predictions)
     f1 = evaluator.setMetricName("f1").evaluate(predictions)
     auc_roc = evaluator.evaluate(predictions)
-    evaluator = BinaryClassificationEvaluator(labelCol="RiskCategory_b",metricName="areaUnderROC")
+    evaluator = BinaryClassificationEvaluator(labelCol=label,metricName="areaUnderROC")
     print(f"Accuracy: {accuracy}")
     print(f"Precision: {precision}")
     print(f"Recall: {recall}")

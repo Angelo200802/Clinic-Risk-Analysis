@@ -1,7 +1,9 @@
 from pyspark.ml import PipelineModel
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, when, lit
-import json,os
+import json,os, dotenv
+
+dotenv.load_dotenv()
 
 class Ensemble:
 
@@ -44,7 +46,7 @@ class Ensemble:
         ensemble_df = ensemble_df.withColumn("weighted_score", weighted_sum_expression)
         
         final_df = ensemble_df.withColumn(
-            "ensemble_prediction",
+            "Prediction",
             when(col("weighted_score") > self.thresholds, "Low Risk").otherwise("High Risk")
         )
 

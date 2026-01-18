@@ -1,8 +1,10 @@
 from pyspark.sql import SparkSession
+from model.ensemble import Ensemble 
 import logging
 
 _spark = None
 _dataset = None
+model = Ensemble.build()
 
 def get_session() -> SparkSession:
 
@@ -27,6 +29,6 @@ def load_dataset(ds_path: str):
     global _dataset
     if not _dataset:
         logging.info(f"Loading dataset from: {ds_path}")
-        _dataset = _spark.read.csv(ds_path, header=True, inferSchema=True)
+        _dataset = model.classify(_spark.read.csv(ds_path, header=True, inferSchema=True))
     
     return _dataset

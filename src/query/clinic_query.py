@@ -13,52 +13,15 @@ router_clinic_query = APIRouter()
 
 ds : DataFrame = load_dataset(os.getenv("DATASET_PATH"))
 
-def get_columns():
-    col_dict : dict = {}
-    for col in ds.columns:
-        col_dict[col.replace(" ","_").lower()] = col
-    return col_dict
-
-vital_signs = get_columns()
-
-
-def get_column_stats(df:DataFrame,column_name: str):
-    
-    if column_name not in vital_signs.keys():
-        return {"error": f"Column {column_name} does not exist in the DataFrame."}
-    
-    stats = df.select(
-        F.count(F.col(vital_signs[column_name])).alias("count"),
-        F.mean(F.col(vital_signs[column_name])).alias("mean"),
-        F.stddev(F.col(vital_signs[column_name])).alias("stddev"),
-        F.min(F.col(vital_signs[column_name])).alias("min"),
-        F.max(F.col(vital_signs[column_name])).alias("max"),
-    ).first()
-    
-    return {
-        "count": stats["count"],
-        "mean": stats["mean"],
-        "stddev": stats["stddev"],
-        "min": stats["min"],
-        "max": stats["max"],
-    }
-
-@router_clinic_query.get("/stats/{signs}")
-def get_stats(signs:str):
-    results = get_column_stats(ds, signs)
-    
-    if "error" in results:
-        raise HTTPException(status_code=404, detail=results["error"])
-    
-    return results
-
 @router_clinic_query.get("/clinic/shockindex")
 def get_shock_index(order: str = "desc"):
     shock_df = ds \
-        .withColumn("ShockIndex", F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
+        .withColumn(
+            "ShockIndex", 
+            F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
         .filter(F.col("ShockIndex") > 0.85) \
         .orderBy(F.col("ShockIndex").asc() if order == "asc" else F.col("ShockIndex").desc() ) \
-        .select("Patient ID","Heart Rate", "Systolic Blood Pressure", "ShockIndex")
+        .select("Patient ID","Heart Rate", "Systolic Blood Pressure", "Prediction", "ShockIndex")
     pd_shock = shock_df.toPandas()  
     logging.info(f"Number of patients with Shock Index > 0.9: {len(pd_shock)}") 
     return {
@@ -117,8 +80,14 @@ def get_news2():
 @router_clinic_query.get("/clinic/differentialpressure")
 def get_differential_pressure(order: str = "desc"):
     diff_pressure_df = ds \
-        .withColumn("DifferentialPressure", F.col("Systolic Blood Pressure") - F.col("Diastolic Blood Pressure")) \
-        .withColumn("Label", F.when(F.col("DifferentialPressure") > 60, "High").otherwise(F.when(F.col("DifferentialPressure") < 25, "Low").otherwise("Normal"))) \
+        .withColumn(
+            "DifferentialPressure", 
+            F.col("Systolic Blood Pressure") - F.col("Diastolic Blood Pressure")) \
+        .withColumn(
+            "Label", 
+            F.when(F.col("DifferentialPressure") > 60, "High")\
+                .otherwise(F.when(F.col("DifferentialPressure") < 25, "Low")\
+                .otherwise("Normal"))) \
         .orderBy(F.col("DifferentialPressure").asc() if order == "asc" else F.col("DifferentialPressure").desc() ) \
         .select("Patient ID","Systolic Blood Pressure", "Diastolic Blood Pressure", "DifferentialPressure", "Label")
     pd_diff_pressure = diff_pressure_df.toPandas()  
@@ -126,6 +95,17 @@ def get_differential_pressure(order: str = "desc"):
     return {
         "data": pd_diff_pressure.head(10).to_dict(orient="records") 
     }
+
+@router_clinic_query.get("/clinic/hemodynamicrisk")
+def get_hemodynamic_risk():
+    hemodynamic_risk = ds.withColumn("Shock_Index", F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
+    .filter((F.col("Derived_MAP") < 70) & (F.col("Shock_Index") > 0.9)) \
+    .select("Patient ID", "Derived_MAP", "Shock_Index", "Risk Category")
+
+    return {
+        "data": hemodynamic_risk.toPandas().head(5).to_dict(orient="records")
+    }
+
 
 @router_clinic_query.get("/clinic/differentialpressure/filter/{label}")
 def filter_differential_pressure(label: str, order: str = "desc"):
@@ -142,3 +122,12 @@ def filter_differential_pressure(label: str, order: str = "desc"):
         "count": len(pd_diff_pressure)
     }
 
+@router_clinic_query.get("/clinic/metabolic_effs")
+def get_metabolic_effects():
+    metabolic_stress = ds.withColumn("Cardiac_Effort", F.col("Heart Rate") * F.col("Derived_BMI")) \
+    .groupBy("Risk Category") \
+    .agg(F.avg("Cardiac_Effort").alias("Sforzo_Metabolico_Medio"))
+
+    return {
+        "data": metabolic_stress.toPandas().to_dict(orient="records")
+    }
