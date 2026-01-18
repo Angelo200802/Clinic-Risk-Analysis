@@ -1,30 +1,42 @@
 from pyspark.ml import PipelineModel
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, when, lit
+from enum import Enum
 import json,os, dotenv
 
 dotenv.load_dotenv()
 
 class Ensemble:
 
-    def __init__(self, models : dict):
-        self.models : dict[str, tuple[PipelineModel, float]] = models
+    class Weigth(Enum):
+        RECALL = "recall"
+        F1_SCORE = "f1"
+        PRECISION = "precision"
+        ACCURACY = "accuracy"
+
+    def __init__(self, models : dict,weights_by: Weigth = Weigth.RECALL):
+        self.models : dict[str, tuple[PipelineModel, float]] = {
+            "logistic_regression": os.getenv("SAVE_MODEL_PATH") + "/log_reg_pipeline",
+            "mlp": os.getenv("SAVE_MODEL_PATH") + "/ann_model_pipeline",
+            "naive_bayes": os.getenv("SAVE_MODEL_PATH") + "/nb_pipeline"
+        } if models is None else models
+        self.weights_by = weights_by.value
         self.metrics : dict = None
         self.total_weights : int = 0 
         for name, model in models.items():
             pipe = self._load(path=model)
-            weight = self._get_recall(name)
+            weight = self._get_weigths(name)
             self.models[name] = (pipe, weight)
             self.total_weights += weight
         self.thresholds = self.total_weights / 2
 
-    def _get_recall(self,model:str) -> float:
+    def _get_weigths(self,model:str) -> float:
         if not self.metrics:
             with open(os.getenv("SAVE_MODEL_PATH") +"/metrics.json", "r") as f:
                 self.metrics = json.load(f)
             f.close()
 
-        return self.metrics[model]["recall"]
+        return self.metrics[model][self.weights_by]
 
     def _load(self,path:str) -> PipelineModel:
         return PipelineModel.load(path)
@@ -51,12 +63,3 @@ class Ensemble:
         )
 
         return final_df
-    
-    @staticmethod
-    def build() -> 'Ensemble':
-        models = {
-            "logistic_regression": os.getenv("SAVE_MODEL_PATH") + "/log_reg_pipeline",
-            "mlp": os.getenv("SAVE_MODEL_PATH") + "/ann_model_pipeline",
-            "naive_bayes": os.getenv("SAVE_MODEL_PATH") + "/nb_pipeline"
-        }
-        return Ensemble(models)

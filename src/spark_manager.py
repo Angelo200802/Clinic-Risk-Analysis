@@ -4,7 +4,7 @@ import logging
 
 _spark = None
 _dataset = None
-model = Ensemble.build()
+model = Ensemble()
 
 def get_session() -> SparkSession:
 
