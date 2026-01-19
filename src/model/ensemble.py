@@ -14,16 +14,16 @@ class Ensemble:
         PRECISION = "precision"
         ACCURACY = "accuracy"
 
-    def __init__(self, models : dict,weights_by: Weigth = Weigth.RECALL):
+    def __init__(self,models : dict = None,weights_by: Weigth = Weigth.RECALL):
         self.models : dict[str, tuple[PipelineModel, float]] = {
             "logistic_regression": os.getenv("SAVE_MODEL_PATH") + "/log_reg_pipeline",
             "mlp": os.getenv("SAVE_MODEL_PATH") + "/ann_model_pipeline",
             "naive_bayes": os.getenv("SAVE_MODEL_PATH") + "/nb_pipeline"
-        } if models is None else models
+        } if not models else models
         self.weights_by = weights_by.value
         self.metrics : dict = None
         self.total_weights : int = 0 
-        for name, model in models.items():
+        for name, model in self.models.items():
             pipe = self._load(path=model)
             weight = self._get_weigths(name)
             self.models[name] = (pipe, weight)

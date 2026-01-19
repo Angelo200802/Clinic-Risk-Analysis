@@ -12,11 +12,13 @@ services:
     volumes:
       - .:/app
 
-  stream:
+  appstream:
     build:
       context: .
       dockerfile: ./stream/Dockerfile
     ports:
       - "8501:8501"
+    depends_on:
+      - app
     volumes:
-      - .:/app
+      - .:/stream
