@@ -9,3 +9,5 @@ matplotlib
 seaborn
 requests
 langchain-google-genai
+redis[hiredis]
+pydantic

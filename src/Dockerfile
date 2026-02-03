@@ -1,7 +1,9 @@
 FROM python:3.9-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-21-jre-headless && \
+    apt-get install -y --no-install-recommends \
+    openjdk-21-jre-headless \
+    curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
