@@ -12,7 +12,8 @@ RUN apt-get update && \
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH="$JAVA_HOME/bin:$PATH"
 ENV PYSPARK_PYTHON=python3
-ENV PYSPARK_SUBMIT_ARGS="--packages com.redislabs:spark-redis_2.13:3.1.0 pyspark-shell"
+# Usa la versione 2.4.2 per massima compatibilità con Spark 3.x e Scala 2.12
+ENV PYSPARK_SUBMIT_ARGS="--packages com.redislabs:spark-redis_2.12:2.4.2 --conf spark.redis.host=redis --conf spark.redis.port=6379 pyspark-shell"
 WORKDIR /app
 
 COPY requirements.txt .

@@ -1,7 +1,9 @@
 from pyspark.sql import SparkSession
 from model.ensemble import Ensemble 
-import logging
+from dotenv import load_dotenv
+import logging, os
 
+load_dotenv()
 _spark = None
 _dataset = None
 
@@ -10,11 +12,15 @@ def batch_job(df_batch, batch_id):
         logging.info(f"Processing batch id: {batch_id}")
         df_batch.show(truncate=False)
 def start_streaming():
-    df_stream = get_session().readStream \
-                .format("redis") \
-                .option("stream.keys", "vital_signs") \
-                .option("stream.read.batch.size", "50") \
-                .load()
+    df_stream = (
+        get_session().readStream 
+            .format("redis") 
+            .option("redis.host", os.getenv("REDIS_HOST","redis"))  
+            .option("redis.port", os.getenv("REDIS_PORT", "6379"))    
+            .option("stream.keys", "vital_signs") 
+            .option("stream.read.batch.size", "50") 
+            .load()
+        )
 
     _streaming_query = df_stream.writeStream \
         .foreachBatch(batch_job) \
@@ -23,7 +29,7 @@ def start_streaming():
 
 def get_session() -> SparkSession:
     logging.info("Initializing Spark session")
-    redis_package = "com.redislabs:spark-redis_2.13:3.1.0"
+    redis_package = "com.redislabs:spark-redis_2.12:2.4.2"
     global _spark
     if _spark:
         return _spark
@@ -31,10 +37,10 @@ def get_session() -> SparkSession:
         SparkSession.builder
         .appName("VitalSignsProject")
         .master("local[*]")
-        .config("spark.jars.packages", redis_package) # Scarica il connettore automaticamente
-        .config("spark.driver.memory", "2g")          # Ridotto a 2g per stabilità su Docker
-        .config("spark.executor.memory", "2g")
-        .config("spark.sql.shuffle.partitions", "2")  # Ottimizzazione per local mode
+        #.config("spark.jars.packages", redis_package) # Scarica il connettore automaticamente
+        .config("spark.driver.memory", "4g")          
+        .config("spark.executor.memory", "4g")
+        .config("spark.sql.shuffle.partitions", "2")  
         .getOrCreate()
     )
 

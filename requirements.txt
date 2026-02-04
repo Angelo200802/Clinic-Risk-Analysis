@@ -1,5 +1,5 @@
 fastapi[standard]
-pyspark
+pyspark == 3.5.0
 dotenv
 redis
 scikit-learn

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-redis_db = Redis(host='redis', port=6379, db=0)
+redis_db = Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT")), db=0)
 ensemble = Ensemble()
 router_streaming = APIRouter()
 
