@@ -57,18 +57,19 @@ def ask_llm(raw) -> dict:
     chain = prompt | model | StrOutputParser()
     
     try :
-        response = chain.invoke({"vital_data": json.dumps(raw)})
-        logging.info(f"LLM response: {response}")
+        raise Exception("Testing exception handling")  # Remove or comment this line in production
+        response = json.loads(chain.invoke({"vital_data": json.dumps(raw)}))
     except Exception as e:
-        logging.error(f"Error during LLM invocation: {e}")
-        response = json.dumps(raw)  # Fallback to returning the input data
+        logging.error(f"Error during LLM invocation: Returning input data.")
+        response = raw  # Fallback to returning the input data
+        logging.log(logging.INFO, f"{raw}")
     return response
 
 async def generate_streaming_data():
     next = await fetch_data()
 
     while True:
-        next = json.loads(ask_llm(next))
+        next = ask_llm(next)
         post_data(next)
         time.sleep(10)
 
@@ -76,7 +77,7 @@ if __name__ == "__main__":
     logging.log(logging.INFO, "Starting streaming data generation...")
     logging.log(logging.INFO, f"GET URL: {URL_GET}")
     logging.log(logging.INFO, f"POST URL: {URL_POST}")
-    for i in range(3):
+    for i in range(1):
         thread = Thread(target= lambda : asyncio.run(generate_streaming_data()))
         thread.start()
         time.sleep(5)

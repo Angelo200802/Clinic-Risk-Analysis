@@ -11,6 +11,7 @@ RUN apt-get update && \
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
 ENV PATH="$JAVA_HOME/bin:$PATH"
 ENV PYSPARK_PYTHON=python3
+ENV PYSPARK_SUBMIT_ARGS="--packages com.redislabs:spark-redis_2.13:3.1.0 pyspark-shell"
 
 WORKDIR /app
 
