@@ -10,7 +10,7 @@ def batch_job(df_batch, batch_id):
         logging.info(f"Processing batch id: {batch_id}")
         df_batch.show(truncate=False)
 def start_streaming():
-    df_stream = _spark.readStream \
+    df_stream = get_session().readStream \
                 .format("redis") \
                 .option("stream.keys", "vital_signs") \
                 .option("stream.read.batch.size", "50") \
@@ -22,8 +22,8 @@ def start_streaming():
         .start()
 
 def get_session() -> SparkSession:
-    jar_path = "/app/jars/spark-redis-3.1.0-with-dependencies.jar"
     logging.info("Initializing Spark session")
+    redis_package = "com.redislabs:spark-redis_2.13:3.1.0"
     global _spark
     if _spark:
         return _spark
@@ -31,9 +31,10 @@ def get_session() -> SparkSession:
         SparkSession.builder
         .appName("VitalSignsProject")
         .master("local[*]")
-        .config("spark.driver.memory", "4g")    # Assegna 4GB al driver
-        .config("spark.executor.memory", "4g")  # Assegna 4GB agli esecutori
-        .config("spark.hadoop.fs.defaultFS", "file:///")
+        .config("spark.jars.packages", redis_package) # Scarica il connettore automaticamente
+        .config("spark.driver.memory", "2g")          # Ridotto a 2g per stabilità su Docker
+        .config("spark.executor.memory", "2g")
+        .config("spark.sql.shuffle.partitions", "2")  # Ottimizzazione per local mode
         .getOrCreate()
     )
 
