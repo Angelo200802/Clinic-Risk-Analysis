@@ -1,7 +1,7 @@
 from pyspark.sql.types import StructType, StructField,IntegerType, DoubleType, StringType
 from redis import Redis
 from fastapi import APIRouter
-from spark_manager import load_dataset
+from spark_manager import load_dataset, get_session
 import os, logging
 from model.ensemble import Ensemble
 from pydantic import BaseModel, Field
@@ -32,6 +32,8 @@ class VitalSigns(BaseModel):
     derived_bmi : float = Field(alias="Derived_BMI")
     derived_map : float = Field(alias="Derived_MAP")
     risk_category : str = Field(default= None, alias="Risk Category")
+    
+df = load_dataset(os.getenv("DATASET_PATH"))
 
 schema = StructType([
     StructField("Patient ID", IntegerType(), True),
@@ -52,7 +54,38 @@ schema = StructType([
     StructField("Derived_MAP", DoubleType(), True),
     StructField("Risk Category", StringType(), True)
 ])
-df = load_dataset(os.getenv("DATASET_PATH"))
+
+def batch_job(df_batch, batch_id):
+    if df_batch.count() > 0:
+        logging.info(f"Processing batch id: {batch_id}")
+        prediction = ensemble.classify(df_batch).collect()
+        logging.info(f"Batch id: {batch_id} processed with {len(prediction)} records.")
+        for row in prediction:
+            record = row.asDict()
+            logging.info(f"Storing prediction for Patient ID: {record['Patient ID']} with Risk Category: {record['Risk Category']}")
+
+def start_streaming():
+    df_stream = (
+        get_session().readStream 
+            .format("redis") 
+            .option("redis.host", os.getenv("REDIS_HOST","redis"))  
+            .option("redis.port", os.getenv("REDIS_PORT", "6379"))    
+            .option("stream.keys", "vital_signs") 
+            .option("stream.read.batch.size", "50") 
+            .schema(schema)
+            .load()
+        )
+
+    if os.path.exists("/tmp/spark_checkpoint"):
+        import shutil
+        shutil.rmtree("/tmp/spark_checkpoint")
+
+    _streaming_query = df_stream.writeStream \
+        .foreachBatch(batch_job) \
+        .option("checkpointLocation", "/tmp/spark_checkpoint") \
+        .start()
+    
+    return _streaming_query
 
 @router_streaming.get("/getseed")
 def get_seed():
@@ -66,5 +99,5 @@ def get_seed():
 @router_streaming.post("/newraw")
 def new_raw(raw: VitalSigns):
     logging.log(logging.INFO,f"Received new raw data: {raw}")
-    redis_db.xadd('vital_signs', raw.model_dump(by_alias=True,exclude_none=True))
+    redis_db.xadd('vital_signs', raw.model_dump(by_alias=True,exclude_none=False))
 
