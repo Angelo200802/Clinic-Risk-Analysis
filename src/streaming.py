@@ -1,8 +1,9 @@
 from pyspark.sql.types import StructType, StructField,IntegerType, DoubleType, StringType
+from pyspark.sql.functions import col
 from redis import Redis
 from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
-import os, logging
+import os, logging, time
 from model.ensemble import Ensemble
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv  
@@ -36,33 +37,49 @@ class VitalSigns(BaseModel):
 df = load_dataset(os.getenv("DATASET_PATH"))
 
 schema = StructType([
-    StructField("Patient ID", IntegerType(), True),
-    StructField("Heart Rate", IntegerType(), True),
-    StructField("Respiratory Rate", IntegerType(), True),
+    StructField("Patient ID", StringType(), True),
+    StructField("Heart Rate", StringType(), True),
+    StructField("Respiratory Rate", StringType(), True),
     StructField("Timestamp", StringType(), True),
-    StructField("Body Temperature", DoubleType(), True),
-    StructField("Oxygen Saturation", DoubleType(), True),
-    StructField("Systolic Blood Pressure", DoubleType(), True),
-    StructField("Diastolic Blood Pressure", DoubleType(), True),
-    StructField("Age", IntegerType(), True),
+    StructField("Body Temperature", StringType(), True),
+    StructField("Oxygen Saturation", StringType(), True),
+    StructField("Systolic Blood Pressure", StringType(), True),
+    StructField("Diastolic Blood Pressure", StringType(), True),
+    StructField("Age", StringType(), True),
     StructField("Gender", StringType(), True),
-    StructField("Weight (kg)", DoubleType(), True),
-    StructField("Height (m)", DoubleType(), True),
-    StructField("Derived_HRV", DoubleType(), True),
-    StructField("Derived_Pulse_Pressure", DoubleType(), True),
-    StructField("Derived_BMI", DoubleType(), True),
-    StructField("Derived_MAP", DoubleType(), True),
+    StructField("Weight (kg)", StringType(), True),
+    StructField("Height (m)", StringType(), True),
+    StructField("Derived_HRV", StringType(), True),
+    StructField("Derived_Pulse_Pressure", StringType(), True),
+    StructField("Derived_BMI", StringType(), True),
+    StructField("Derived_MAP", StringType(), True),
     StructField("Risk Category", StringType(), True)
 ])
 
 def batch_job(df_batch, batch_id):
-    if df_batch.count() > 0:
-        logging.info(f"Processing batch id: {batch_id}")
-        prediction = ensemble.classify(df_batch).collect()
-        logging.info(f"Batch id: {batch_id} processed with {len(prediction)} records.")
-        for row in prediction:
-            record = row.asDict()
-            logging.info(f"Storing prediction for Patient ID: {record['Patient ID']} with Risk Category: {record['Risk Category']}")
+    df_batch.cache() 
+    
+    current_count = df_batch.count()
+    
+    if current_count > 0:
+        logging.info(f"--- START BATCH {batch_id} (Records: {current_count}) ---")
+        df_batch.show(truncate=False)
+        try:
+            df_cleaned = df_batch.select([
+                col(c).cast("int") if "ID" in c or "Age" in c or "Rate" in c else 
+                col(c).cast("double") if "Body" in c or "Oxygen" in c or "Pressure" in c or "Weight" in c or "Height" in c or "Derived" in c else 
+                col(c).cast("timestamp") if "Timestamp" in c else
+                col(c) for c in df_batch.columns
+            ])
+            
+            prediction = ensemble.classify(df_cleaned).collect()
+            logging.info(f"Batch {batch_id} completato. Predizioni: {len(prediction)}")
+            #send results via websocket
+            logging.info(f"--- END BATCH {batch_id} ---")
+        except Exception as e:
+            logging.error(f"Errore nel processamento del batch: {e}")
+    
+    df_batch.unpersist()
 
 def start_streaming():
     df_stream = (
@@ -72,6 +89,7 @@ def start_streaming():
             .option("redis.port", os.getenv("REDIS_PORT", "6379"))    
             .option("stream.keys", "vital_signs") 
             .option("stream.read.batch.size", "50") 
+            .option("stream.group.name", f"spark-group-{int(time.time())}")
             .schema(schema)
             .load()
         )
@@ -98,6 +116,9 @@ def get_seed():
 
 @router_streaming.post("/newraw")
 def new_raw(raw: VitalSigns):
-    logging.log(logging.INFO,f"Received new raw data: {raw}")
-    redis_db.xadd('vital_signs', raw.model_dump(by_alias=True,exclude_none=False))
+    raw_dict = raw.model_dump(by_alias=True, exclude_none=False)
+    clean_data = {k: (v if v is not None else "") for k, v in raw_dict.items()}
+    redis_db.xadd('vital_signs', clean_data)
+    
+    return {"status": "ok"}
 
