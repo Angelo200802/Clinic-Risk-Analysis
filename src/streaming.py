@@ -1,5 +1,5 @@
-from pyspark.sql.types import StructType, StructField,IntegerType, DoubleType, StringType
-from pyspark.sql.functions import col
+from pyspark.sql.types import StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
+from pyspark.sql.functions import col, window, avg, max, min
 from redis import Redis
 from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
@@ -37,22 +37,22 @@ class VitalSigns(BaseModel):
 df = load_dataset(os.getenv("DATASET_PATH"))
 
 schema = StructType([
-    StructField("Patient ID", StringType(), True),
-    StructField("Heart Rate", StringType(), True),
-    StructField("Respiratory Rate", StringType(), True),
+    StructField("Patient ID", IntegerType(), True),
+    StructField("Heart Rate", IntegerType(), True),
+    StructField("Respiratory Rate", IntegerType(), True),
     StructField("Timestamp", StringType(), True),
-    StructField("Body Temperature", StringType(), True),
-    StructField("Oxygen Saturation", StringType(), True),
-    StructField("Systolic Blood Pressure", StringType(), True),
-    StructField("Diastolic Blood Pressure", StringType(), True),
-    StructField("Age", StringType(), True),
+    StructField("Body Temperature", DoubleType(), True),
+    StructField("Oxygen Saturation", DoubleType(), True),
+    StructField("Systolic Blood Pressure", DoubleType(), True),
+    StructField("Diastolic Blood Pressure", DoubleType(), True),
+    StructField("Age", IntegerType(), True),
     StructField("Gender", StringType(), True),
-    StructField("Weight (kg)", StringType(), True),
-    StructField("Height (m)", StringType(), True),
-    StructField("Derived_HRV", StringType(), True),
-    StructField("Derived_Pulse_Pressure", StringType(), True),
-    StructField("Derived_BMI", StringType(), True),
-    StructField("Derived_MAP", StringType(), True),
+    StructField("Weight (kg)", DoubleType(), True),
+    StructField("Height (m)", DoubleType(), True),
+    StructField("Derived_HRV", DoubleType(), True),
+    StructField("Derived_Pulse_Pressure", DoubleType(), True),
+    StructField("Derived_BMI", DoubleType(), True),
+    StructField("Derived_MAP", DoubleType(), True),
     StructField("Risk Category", StringType(), True)
 ])
 
@@ -63,16 +63,8 @@ def batch_job(df_batch, batch_id):
     
     if current_count > 0:
         logging.info(f"--- START BATCH {batch_id} (Records: {current_count}) ---")
-        df_batch.show(truncate=False)
         try:
-            df_cleaned = df_batch.select([
-                col(c).cast("int") if "ID" in c or "Age" in c or "Rate" in c else 
-                col(c).cast("double") if "Body" in c or "Oxygen" in c or "Pressure" in c or "Weight" in c or "Height" in c or "Derived" in c else 
-                col(c).cast("timestamp") if "Timestamp" in c else
-                col(c) for c in df_batch.columns
-            ])
-            
-            prediction = ensemble.classify(df_cleaned).collect()
+            prediction = ensemble.classify(df_batch).collect()
             logging.info(f"Batch {batch_id} completato. Predizioni: {len(prediction)}")
             #send results via websocket
             logging.info(f"--- END BATCH {batch_id} ---")
@@ -80,6 +72,16 @@ def batch_job(df_batch, batch_id):
             logging.error(f"Errore nel processamento del batch: {e}")
     
     df_batch.unpersist()
+
+def batch_job_stats(df_stats, batch_id):
+    logging.info(f"--- START STATS WINDOW {batch_id} ---")   
+    df_stats.show()
+    count = df_stats.count()
+    if count > 0:
+        logging.info(f"Finestra stats batch {batch_id} con {count} record.")
+        ds_stats = df_stats.collect()  
+        for row in ds_stats:
+            logging.info(f"Finestra: {row}")
 
 def start_streaming():
     df_stream = (
@@ -89,21 +91,47 @@ def start_streaming():
             .option("redis.port", os.getenv("REDIS_PORT", "6379"))    
             .option("stream.keys", "vital_signs") 
             .option("stream.read.batch.size", "50") 
-            .option("stream.group.name", f"spark-group-{int(time.time())}")
+            .option("stream.group.name", f"spark-classification")
             .schema(schema)
             .load()
         )
-
-    if os.path.exists("/tmp/spark_checkpoint"):
-        import shutil
-        shutil.rmtree("/tmp/spark_checkpoint")
-
-    _streaming_query = df_stream.writeStream \
-        .foreachBatch(batch_job) \
-        .option("checkpointLocation", "/tmp/spark_checkpoint") \
-        .start()
+    df_stats_raw = (get_session().readStream 
+        .format("redis") 
+        .option("stream.keys", "vital_signs") 
+        .option("stream.group.name", "spark-statistics")     # Gruppo B
+        .schema(schema)
+        .load())
     
-    return _streaming_query
+    df_stats_raw = df_stats_raw.withColumn("Timestamp", col("Timestamp").cast("timestamp"))
+
+    classification_query = (df_stream.writeStream 
+        .foreachBatch(batch_job) 
+        .option("checkpointLocation", "/tmp/spark_checkpoint") 
+        .start())
+
+
+    df_windowed = (df_stats_raw
+        .withWatermark("Timestamp", "1 minute")
+        .groupBy(
+            window(col("Timestamp"), "1 minute", "30 seconds"),
+            col("Patient ID")
+        )
+        .agg(
+            avg("Heart Rate").alias("avg_heart_rate"),
+            min("Heart Rate").alias("min_heart_rate"),
+            max("Heart Rate").alias("max_heart_rate"),
+            avg("Respiratory Rate").alias("avg_respiratory_rate"),
+        )
+    )
+
+    query_stats = (df_windowed.writeStream
+        .foreachBatch(batch_job_stats)
+        .outputMode("update")
+        .option("truncate", "false")
+        .start()
+    )
+
+    return [ classification_query,query_stats]
 
 @router_streaming.get("/getseed")
 def get_seed():

@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     spark_query = start_streaming()
     yield
     logging.info("Shutting down the Vital Signs Analysis Application...")
-    spark_query.stop()
+    for q in spark_query: q.stop()
 
 dotenv.load_dotenv()
 logging.basicConfig(level=logging.INFO)
