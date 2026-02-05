@@ -4,15 +4,15 @@ This repository contains a Big Data application developed with **Apache Spark** 
 The system leverages **Machine Learning** and **Ensemble Learning** techniques to categorize health measurements into risk classes, such as low, medium, or high.
 
 ## 📌 Project Overview
-The application is designed to handle large-scale medical datasets and provides two primary processing workflows[cite: 1, 3]:
+The application is designed to handle large-scale medical datasets and provides two primary processing workflows:
 * **Batch Processing:** Analyzing historical data and performing complex clinical queries using **Spark SQL**.
 * **Real-time Streaming:** Monitoring continuous data flows (simulated or sensor-based) using **Spark Structured Streaming** to provide immediate risk alerts.
 
 ## 📊 Dataset Features
 The project utilizes the **Human Vital Sign Dataset** (approx. 200,000 measurements), focusing on the following key physiological parameters:
-* **Heart Rate** and **Respiratory Rate**[cite: 7].
-* **Blood Pressure** (Systolic and Diastolic)[cite: 7].
-* **Oxygen Saturation ($SpO_2$)** and **Body Temperature**[cite: 7].
+* **Heart Rate** and **Respiratory Rate**.
+* **Blood Pressure** (Systolic and Diastolic).
+* **Oxygen Saturation ($SpO_2$)** and **Body Temperature**.
 
 ## 🧠 Machine Learning Approach
 To ensure high accuracy and robustness, the system implements an **Ensemble Learning** strategy.It combines several base learners through voting techniques:
