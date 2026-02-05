@@ -22,19 +22,19 @@ services:
     networks:
       - app-network
 
-  frontend:
-    build:
-      context: .
-      dockerfile: ./frontend/Dockerfile
-    ports:
-      - "3000:80"
-    depends_on:
-      app:
-        condition: service_healthy
-    volumes:
-      - .:/frontend
-    networks:
-      - app-network
+  #frontend:
+  #  build:
+  #    context: .
+  #    dockerfile: ./frontend/Dockerfile
+  #  ports:
+  #    - "3000:80"
+  #  depends_on:
+  #    app:
+  #      condition: service_healthy
+  #  volumes:
+  #    - .:/frontend
+  #  networks:
+  #    - app-network
 
   appstream:
     build:

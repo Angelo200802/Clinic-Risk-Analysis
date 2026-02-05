@@ -1,12 +1,16 @@
 from pyspark.sql.types import StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
+from pyspark.sql import Window
+import pyspark.sql.functions as F
 from pyspark.sql.functions import col, window, avg, max, min
 from redis import Redis
 from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
-import os, logging, time
+import os, logging, asyncio
 from model.ensemble import Ensemble
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv  
+from dotenv import load_dotenv 
+from fastapi import WebSocket
+import bus
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -14,6 +18,7 @@ logging.basicConfig(level=logging.INFO)
 redis_db = Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT")), db=0)
 ensemble = Ensemble()
 router_streaming = APIRouter()
+
 
 class VitalSigns(BaseModel):
     patient_id : int = Field(alias="Patient ID")
@@ -57,8 +62,9 @@ schema = StructType([
 ])
 
 def batch_job(df_batch, batch_id):
-    df_batch.cache() 
+    global main_loop
     
+    df_batch.cache() 
     current_count = df_batch.count()
     
     if current_count > 0:
@@ -66,22 +72,43 @@ def batch_job(df_batch, batch_id):
         try:
             prediction = ensemble.classify(df_batch).collect()
             logging.info(f"Batch {batch_id} completato. Predizioni: {len(prediction)}")
-            #send results via websocket
+            
+            for row in prediction:
+                data_dict = row.asDict()
+                bus.main_loop.call_soon_threadsafe(
+                    bus.data_queue.put_nowait, 
+                    data_dict
+                )
             logging.info(f"--- END BATCH {batch_id} ---")
         except Exception as e:
             logging.error(f"Errore nel processamento del batch: {e}")
     
     df_batch.unpersist()
 
-def batch_job_stats(df_stats, batch_id):
-    logging.info(f"--- START STATS WINDOW {batch_id} ---")   
+def batch_job_stats(df_stats, batch_id): 
     df_stats.show()
     count = df_stats.count()
     if count > 0:
-        logging.info(f"Finestra stats batch {batch_id} con {count} record.")
-        ds_stats = df_stats.collect()  
-        for row in ds_stats:
-            logging.info(f"Finestra: {row}")
+        patient_window = Window.partitionBy("Patient ID").orderBy("window.start")
+
+        # Calcoliamo il trend come differenza tra la media attuale e quella precedente
+        df_with_trend = df_stats.withColumn(
+            "prev_avg_hr", F.lag("avg_heart_rate").over(patient_window)
+        ).withColumn(
+            "hr_trend", 
+            F.when(F.col("prev_avg_hr").isNull(), "Inizializzazione")
+             .when(F.col("avg_heart_rate") > F.col("prev_avg_hr"), "Aumento ⬆️")
+             .when(F.col("avg_heart_rate") < F.col("prev_avg_hr"), "Diminuzione ⬇️")
+             .otherwise("Stabile ➡️")
+        )
+
+        logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
+        df_with_trend.select(
+            "Patient ID", 
+            "window.start", 
+            "avg_heart_rate", 
+            "hr_trend"
+        ).show(truncate=False)
 
 def start_streaming():
     df_stream = (
@@ -98,7 +125,7 @@ def start_streaming():
     df_stats_raw = (get_session().readStream 
         .format("redis") 
         .option("stream.keys", "vital_signs") 
-        .option("stream.group.name", "spark-statistics")     # Gruppo B
+        .option("stream.group.name", "spark-statistics")  
         .schema(schema)
         .load())
     
@@ -150,3 +177,13 @@ def new_raw(raw: VitalSigns):
     
     return {"status": "ok"}
 
+@router_streaming.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    logging.info("WebSocket connection accepted.")
+    try:
+        while True:
+            data = await bus.data_queue.get()
+            await websocket.send_json(data)
+    except Exception as e:
+        logging.info("WebSocket connection closed.")
