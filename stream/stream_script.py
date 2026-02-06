@@ -76,7 +76,7 @@ async def generate_streaming_data():
     
 if __name__ == "__main__":
     logging.log(logging.INFO, "Starting streaming data generation...")
-    for i in range(os.getenv("N_JOBS")):
+    for i in range(int(os.getenv("N_JOBS"))):
         thread = Thread(target = lambda : asyncio.run(generate_streaming_data()))
         thread.start()
         time.sleep(5)

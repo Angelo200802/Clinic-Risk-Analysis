@@ -47,6 +47,24 @@ def get_age_risk():
     
     return age_dist_df.toPandas().to_dict(orient="records") 
 
+@router_model_ev.get("/evaluation/gender_risk")
+def get_gender_risk():
+
+    gender_dist_df = ds.groupBy("Gender", "Risk Category").count()
+    return gender_dist_df.toPandas().to_dict(orient="records")
+
+@router_model_ev.get("/evaluation/bmi_risk")
+def get_bmi_risk():
+
+    bmi_dist_df = ds.withColumn("BMI_Category", 
+        F.when(F.col("Derived_BMI") < 18.5, "Underweight")
+         .when((F.col("Derived_BMI") >= 18.5) & (F.col("Derived_BMI") < 25), "Normal weight")
+         .when((F.col("Derived_BMI") >= 25) & (F.col("Derived_BMI") < 30), "Overweight")
+         .otherwise("Obese")
+    ).groupBy("BMI_Category", "Risk Category").count()
+    
+    return bmi_dist_df.toPandas().to_dict(orient="records")
+
 @router_model_ev.get("/evaluation/risk_composition")
 def get_risk_composition():
 
