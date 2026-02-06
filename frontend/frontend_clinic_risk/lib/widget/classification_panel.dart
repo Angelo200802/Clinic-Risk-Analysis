@@ -72,7 +72,13 @@ class SensorUpdate {
 
 class LiveClassificationPane extends StatefulWidget {
   final SensorUpdate sensorUpdate;
-  const LiveClassificationPane({super.key, required this.sensorUpdate});
+  final bool isConnected;
+
+  const LiveClassificationPane({
+    super.key,
+    required this.sensorUpdate,
+    required this.isConnected,
+  });
 
   @override
   State<LiveClassificationPane> createState() => _LiveClassificationPaneState();
@@ -136,85 +142,93 @@ class _LiveClassificationPaneState extends State<LiveClassificationPane> {
                 width: 2,
               ),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(maxWidth * 0.08),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (_animState == 0) const Threedots(),
+            child: widget.isConnected
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(maxWidth * 0.08),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (_animState == 0) const Threedots(),
 
-                  if (_animState > 0)
-                    AnimatedAlign(
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOutBack,
-                      // L'ID sale di una percentuale fissa rispetto al centro
-                      alignment: _animState == 1
-                          ? Alignment.center
-                          : const Alignment(0, -0.6),
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 600),
-                        style: TextStyle(
-                          fontSize: _animState == 1
-                              ? bigFontSize
-                              : smallFontSize,
-                          fontWeight: FontWeight.bold,
-                          color: _animState == 1
-                              ? Colors.white
-                              : Colors.white70,
-                        ),
-                        child: Text(
-                          "PATIENT ID: ${widget.sensorUpdate.patientId}",
-                        ),
-                      ),
-                    ),
-
-                  if (_animState == 2)
-                    AnimatedAlign(
-                      duration: const Duration(milliseconds: 400),
-                      alignment: const Alignment(
-                        0,
-                        0.4,
-                      ), // Label posizionata nel quadrante inferiore
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0.0, end: 1.0),
-                        duration: const Duration(milliseconds: 400),
-                        builder: (context, value, child) {
-                          return Transform.scale(
-                            scale: value,
-                            child: Opacity(opacity: value, child: child),
-                          );
-                        },
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: maxWidth * 0.08,
-                            vertical: maxWidth * 0.03,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor,
-                            borderRadius: BorderRadius.circular(
-                              maxWidth * 0.04,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: statusColor.withOpacity(0.3),
-                                blurRadius: 10,
+                        if (_animState > 0)
+                          AnimatedAlign(
+                            duration: const Duration(milliseconds: 600),
+                            curve: Curves.easeOutBack,
+                            // L'ID sale di una percentuale fissa rispetto al centro
+                            alignment: _animState == 1
+                                ? Alignment.center
+                                : const Alignment(0, -0.6),
+                            child: AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 600),
+                              style: TextStyle(
+                                fontSize: _animState == 1
+                                    ? bigFontSize
+                                    : smallFontSize,
+                                fontWeight: FontWeight.bold,
+                                color: _animState == 1
+                                    ? Colors.white
+                                    : Colors.white70,
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            widget.sensorUpdate.prediction.toUpperCase(),
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize:
-                                  maxWidth * 0.06, // Testo label responsive
+                              child: Text(
+                                "PATIENT ID: ${widget.sensorUpdate.patientId}",
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+
+                        if (_animState == 2)
+                          AnimatedAlign(
+                            duration: const Duration(milliseconds: 400),
+                            alignment: const Alignment(
+                              0,
+                              0.4,
+                            ), // Label posizionata nel quadrante inferiore
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              duration: const Duration(milliseconds: 400),
+                              builder: (context, value, child) {
+                                return Transform.scale(
+                                  scale: value,
+                                  child: Opacity(opacity: value, child: child),
+                                );
+                              },
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: maxWidth * 0.08,
+                                  vertical: maxWidth * 0.03,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColor,
+                                  borderRadius: BorderRadius.circular(
+                                    maxWidth * 0.04,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: statusColor.withOpacity(0.3),
+                                      blurRadius: 10,
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  widget.sensorUpdate.prediction.toUpperCase(),
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontSize:
+                                        maxWidth *
+                                        0.06, // Testo label responsive
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                ],
-              ),
-            ),
+                  )
+                : const Center(
+                    child: Text(
+                      "Unable to connect to data stream",
+                      style: TextStyle(color: Colors.white54, fontSize: 18),
+                    ),
+                  ),
           ),
         );
       },
