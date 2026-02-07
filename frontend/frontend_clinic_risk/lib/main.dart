@@ -38,6 +38,7 @@ class _DashboardPageState extends State<DashboardPage> {
   late WebSocketChannel _channel;
   bool _isConnected = false;
   bool _isConnecting = true;
+  int selectedIndex = 0;
 
   void _connect() async {
     try {
@@ -78,7 +79,6 @@ class _DashboardPageState extends State<DashboardPage> {
     double screenWidth = MediaQuery.of(context).size.width;
     bool useCollapsed = screenWidth < 1000;
     bool isMobile = screenWidth < 600;
-    int selectedIndex = 0;
 
     Widget buildMainPage() {
       if (selectedIndex == 0) {
@@ -138,12 +138,19 @@ class _DashboardPageState extends State<DashboardPage> {
                   isConnected: _isConnected,
                 ),
         );
+      } else if (selectedIndex == 1) {
+        debugPrint("Selected Index: $selectedIndex");
+        return const Center(child: Text("Patient History"));
+      } else if (selectedIndex == 2) {
+        return const Center(child: Text("Analytics"));
+      } else if (selectedIndex == 3) {
+        return const Center(child: Text("Evaluation"));
       }
       return const Center();
     }
 
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 46, 46, 46),
+      backgroundColor: const Color(0xFF151515),
       drawer: isMobile
           ? Drawer(
               child: SidebarComponent(

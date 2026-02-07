@@ -29,6 +29,27 @@ class SidebarComponent extends StatelessWidget {
             isCollapsed: isCollapsed,
             onTap: () => onItemSelected(0),
           ),
+          SidebarItem(
+            icon: Icons.history_rounded,
+            label: 'Patient History',
+            isActive: selectedIndex == 1,
+            isCollapsed: isCollapsed,
+            onTap: () => onItemSelected(1),
+          ),
+          SidebarItem(
+            icon: Icons.analytics_rounded,
+            label: 'Analytics',
+            isActive: selectedIndex == 2,
+            isCollapsed: isCollapsed,
+            onTap: () => onItemSelected(2),
+          ),
+          SidebarItem(
+            icon: Icons.settings_rounded,
+            label: 'Evaluation',
+            isActive: selectedIndex == 3,
+            isCollapsed: isCollapsed,
+            onTap: () => onItemSelected(3),
+          ),
           const SizedBox(height: 20),
         ],
       ),
@@ -72,22 +93,28 @@ class SidebarItem extends StatefulWidget {
 }
 
 class _SidebarItemState extends State<SidebarItem> {
-  bool _isHovered = false; // Traccia se il mouse è sopra l'elemento
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click, // Cambia il cursore in una manina
+      cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: () {
+          debugPrint("Tapped on: ${widget.label}");
+          widget.onTap();
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+          // Riduciamo i margini orizzontali quando è contratto per centrare l'icona
+          margin: EdgeInsets.symmetric(
+            horizontal: widget.isCollapsed ? 10 : 15,
+            vertical: 4,
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
           decoration: BoxDecoration(
-            // Il colore cambia se è attivo OPPURE se il mouse è sopra
             color: widget.isActive
                 ? Colors.greenAccent.withOpacity(0.15)
                 : (_isHovered
@@ -96,8 +123,11 @@ class _SidebarItemState extends State<SidebarItem> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
+            // Centra l'icona quando la sidebar è contratta
+            mainAxisAlignment: widget.isCollapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: [
-              // L'icona si illumina se hoverata
               Icon(
                 widget.icon,
                 color: (widget.isActive || _isHovered)
@@ -105,18 +135,26 @@ class _SidebarItemState extends State<SidebarItem> {
                     : Colors.white54,
                 size: 22,
               ),
-              const SizedBox(width: 15),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  color: (widget.isActive || _isHovered)
-                      ? Colors.white
-                      : Colors.white54,
-                  fontWeight: widget.isActive
-                      ? FontWeight.bold
-                      : FontWeight.normal,
+              // Mostra lo spazio e il testo SOLO se non è contratto
+              if (!widget.isCollapsed) ...[
+                const SizedBox(width: 15),
+                Flexible(
+                  // Evita errori di overflow se il testo è lungo
+                  child: Text(
+                    widget.label,
+                    overflow:
+                        TextOverflow.ellipsis, // Taglia il testo se non ci sta
+                    style: TextStyle(
+                      color: (widget.isActive || _isHovered)
+                          ? Colors.white
+                          : Colors.white54,
+                      fontWeight: widget.isActive
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
