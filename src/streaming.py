@@ -77,7 +77,10 @@ def batch_job(df_batch : DataFrame, batch_id):
                 data_dict = row.asDict()
                 bus.main_loop.call_soon_threadsafe(
                     bus.data_queue.put_nowait, 
-                    { k : data_dict[k] for k in data_dict if k not in ['Risk Category','pred_logistic_regression','pred_mlp', 'pred_naive_bayes', 'weighted_score'] }
+                    {
+                        "type" : "prediction",
+                        "data" : { k : data_dict[k] for k in data_dict if k not in ['Risk Category','pred_logistic_regression','pred_mlp', 'pred_naive_bayes', 'weighted_score'] }
+                    }
                 )
             logging.info(f"--- END BATCH {batch_id} ---")
         except Exception as e:

@@ -62,7 +62,7 @@ class SidebarComponent extends StatelessWidget {
       child: isCollapsed
           ? const Icon(Icons.bolt, color: Colors.greenAccent, size: 30)
           : const Text(
-              "Menù",
+              "Health Dashboard",
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,

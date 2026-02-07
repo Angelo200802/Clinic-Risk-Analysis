@@ -1,10 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'widget/classification_panel.dart';
+import 'package:frontend_clinic_risk/livestream_page.dart';
 import 'widget/sidebar.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: ".env");
@@ -18,7 +15,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Clinic Risk Analysis',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
@@ -35,44 +32,7 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  late WebSocketChannel _channel;
-  bool _isConnected = false;
-  bool _isConnecting = true;
   int selectedIndex = 0;
-
-  void _connect() async {
-    try {
-      _channel = WebSocketChannel.connect(
-        Uri.parse(dotenv.env['WS_STREAMING']!),
-      );
-
-      // Aspetta che il protocollo WebSocket sia effettivamente stabilito
-      await _channel.ready;
-
-      setState(() {
-        _isConnected = true;
-        _isConnecting = false;
-      });
-    } catch (e) {
-      debugPrint("Errore di connessione: $e");
-      setState(() {
-        _isConnected = false;
-        _isConnecting = false;
-      });
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _connect();
-  }
-
-  @override
-  void dispose() {
-    _channel.sink.close();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,64 +42,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
     Widget buildMainPage() {
       if (selectedIndex == 0) {
-        return Center(
-          child: _isConnected
-              ? StreamBuilder(
-                  stream: _channel.stream,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Text(
-                        "Errore: ${snapshot.error}",
-                        style: TextStyle(color: Colors.red),
-                      );
-                    }
-                    if (!snapshot.hasData) {
-                      return const CircularProgressIndicator();
-                    }
-                    if (snapshot.hasData) {
-                      try {
-                        final data = jsonDecode(snapshot.data!);
-                        final sensorUpdate = SensorUpdate.fromJson(data);
-                        debugPrint("DEBUG KEYS: ${data.keys.toList()}");
-                        return LiveClassificationPane(
-                          sensorUpdate: sensorUpdate,
-                          isConnected: _isConnected,
-                        );
-                      } catch (e) {
-                        return Text('Error parsing data: $e');
-                      }
-                    } else if (snapshot.hasError) {
-                      return Text('WebSocket error: ${snapshot.error}');
-                    } else {
-                      return const CircularProgressIndicator();
-                    }
-                  },
-                )
-              : LiveClassificationPane(
-                  sensorUpdate: SensorUpdate(
-                    patientId: 0,
-                    heartRate: 0,
-                    respiratoryRate: 0,
-                    timestamp: '',
-                    bodyTemperature: 0,
-                    oxygenSaturation: 0,
-                    systolicBloodPressure: 0,
-                    diastolicBloodPressure: 0,
-                    age: 0,
-                    gender: '',
-                    weight: 0,
-                    height: 0,
-                    derivedHrv: 0,
-                    derivedPulsePressure: 0,
-                    derivedBmi: 0,
-                    derivedMap: 0,
-                    prediction: "",
-                  ),
-                  isConnected: _isConnected,
-                ),
-        );
+        return LivestreamPage();
       } else if (selectedIndex == 1) {
-        debugPrint("Selected Index: $selectedIndex");
         return const Center(child: Text("Patient History"));
       } else if (selectedIndex == 2) {
         return const Center(child: Text("Analytics"));
