@@ -58,12 +58,13 @@ def ask_llm(raw) -> dict:
     chain = prompt | model | StrOutputParser()
     
     try :
-        raise Exception("Testing exception handling")  # Remove or comment this line in production
+        #raise Exception("Testing exception handling")  # Remove or comment this line in production
         response = json.loads(chain.invoke({"vital_data": json.dumps(raw)}))
     except Exception as e:
         response = raw  # Fallback to returning the input data
-        response['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-        logging.log(logging.INFO, f"{raw}")
+    logging.info(f"--- BATCH GENERATED ---")
+    logging.info(f"Out: \n{response}")
+    response['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     return response
 
 async def generate_streaming_data():

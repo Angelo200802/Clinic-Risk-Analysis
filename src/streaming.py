@@ -1,7 +1,7 @@
 from pyspark.sql.types import StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
 from pyspark.sql import Window
 import pyspark.sql.functions as F
-from pyspark.sql.functions import col, window, avg, max, min
+from pyspark.sql.functions import col, window
 from redis import Redis
 from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
@@ -62,7 +62,7 @@ schema = StructType([
     StructField("Risk Category", StringType(), True)
 ])
 
-def batch_job(df_batch, batch_id):
+def batch_job(df_batch : DataFrame, batch_id):
     
     df_batch.cache() 
     current_count = df_batch.count()
@@ -102,10 +102,62 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             .withColumn("map_delta", F.col("avg_map") - F.col("prev_avg_map"))
             .withColumn("spo2_delta", F.col("avg_spo2") - F.col("prev_avg_spo2"))
             .withColumn("hrv_delta", F.col("avg_hrv") - F.col("prev_avg_hrv"))
+            .withColumn(
+                "shock_risk",
+                F.when(
+                    (F.col("hr_delta") > 5) &
+                    (F.col("map_delta") < -3),
+                    F.lit(1)
+                ).otherwise(F.lit(0))
+            )
+            .withColumn(
+                "resp_failure_risk",
+                F.when(
+                    (F.col("avg_rr") > 24) &
+                    (F.col("spo2_delta") < -2),
+                    F.lit(1)
+                ).otherwise(F.lit(0))
+            )
+            .withColumn(
+                "sepsis_risk",
+                F.when(
+                    (F.col("avg_temp") > 38) &
+                    (F.col("hr_delta") > 5) &
+                    (F.col("hrv_delta") < -0.1),
+                    F.lit(1)
+                ).otherwise(F.lit(0))
+            )
+            .withColumn(
+                "hemo_instability",
+                F.when(
+                    F.col("std_hr") > 10,
+                    F.lit(1)
+                ).otherwise(F.lit(0))
+            )
+            .withColumn(
+                "clinical_risk_score",
+                F.col("shock_risk") * 3 +
+                F.col("resp_failure_risk") * 2 +
+                F.col("sepsis_risk") * 3 +
+                F.col("hemo_instability")
+            )
         )
 
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
-        df_with_trend.show(truncate=False)
+        df_with_trend.select(
+            "Patient ID",
+            "window.start",
+            "n_samples",
+            "avg_hr", "hr_delta",
+            "avg_map", "map_delta",
+            "avg_spo2", "spo2_delta",
+            "avg_hrv", "hrv_delta",
+            "shock_risk",
+            "resp_failure_risk",
+            "sepsis_risk",
+            "hemo_instability",
+            "clinical_risk_score"
+        ).show(truncate=False)
 
 def start_streaming():
     df_stream = (
