@@ -5,7 +5,8 @@ from pyspark.sql.functions import col, window, avg, max, min
 from redis import Redis
 from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
-import os, logging, asyncio
+import os, logging
+from pyspark.sql import DataFrame
 from model.ensemble import Ensemble
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv 
@@ -84,30 +85,27 @@ def batch_job(df_batch, batch_id):
     
     df_batch.unpersist()
 
-def batch_job_stats(df_stats, batch_id): 
+def batch_job_stats(df_stats : DataFrame, batch_id): 
     df_stats.show()
     count = df_stats.count()
     if count > 0:
         patient_window = Window.partitionBy("Patient ID").orderBy("window.start")
 
         # Calcoliamo il trend come differenza tra la media attuale e quella precedente
-        df_with_trend = df_stats.withColumn(
-            "prev_avg_hr", F.lag("avg_heart_rate").over(patient_window)
-        ).withColumn(
-            "hr_trend", 
-            F.when(F.col("prev_avg_hr").isNull(), "Inizializzazione")
-             .when(F.col("avg_heart_rate") > F.col("prev_avg_hr"), "Aumento ⬆️")
-             .when(F.col("avg_heart_rate") < F.col("prev_avg_hr"), "Diminuzione ⬇️")
-             .otherwise("Stabile ➡️")
+        df_with_trend = (
+            df_stats
+            .withColumn("prev_avg_hr", F.lag("avg_hr").over(patient_window))
+            .withColumn("prev_avg_map", F.lag("avg_map").over(patient_window))
+            .withColumn("prev_avg_spo2", F.lag("avg_spo2").over(patient_window))
+            .withColumn("prev_avg_hrv", F.lag("avg_hrv").over(patient_window))
+            .withColumn("hr_delta", F.col("avg_hr") - F.col("prev_avg_hr"))
+            .withColumn("map_delta", F.col("avg_map") - F.col("prev_avg_map"))
+            .withColumn("spo2_delta", F.col("avg_spo2") - F.col("prev_avg_spo2"))
+            .withColumn("hrv_delta", F.col("avg_hrv") - F.col("prev_avg_hrv"))
         )
 
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
-        df_with_trend.select(
-            "Patient ID", 
-            "window.start", 
-            "avg_heart_rate", 
-            "hr_trend"
-        ).show(truncate=False)
+        df_with_trend.show(truncate=False)
 
 def start_streaming():
     df_stream = (
@@ -143,10 +141,26 @@ def start_streaming():
             col("Patient ID")
         )
         .agg(
-            avg("Heart Rate").alias("avg_heart_rate"),
-            min("Heart Rate").alias("min_heart_rate"),
-            max("Heart Rate").alias("max_heart_rate"),
-            avg("Respiratory Rate").alias("avg_respiratory_rate"),
+            F.avg("Heart Rate").alias("avg_hr"),
+            F.max("Heart Rate").alias("max_hr"),
+            F.min("Heart Rate").alias("min_hr"),
+            F.avg("Respiratory Rate").alias("avg_rr"),
+            F.max("Respiratory Rate").alias("max_rr"),
+            F.min("Respiratory Rate").alias("min_rr"),
+            F.avg("Oxygen Saturation").alias("avg_spo2"),
+            F.max("Oxygen Saturation").alias("max_spo2"),
+            F.min("Oxygen Saturation").alias("min_spo2"),
+            F.avg("Body Temperature").alias("avg_temp"),
+            F.max("Body Temperature").alias("max_temp"),
+            F.min("Body Temperature").alias("min_temp"),
+            F.avg("Derived_MAP").alias("avg_map"),
+            F.max("Derived_MAP").alias("max_map"),
+            F.min("Derived_MAP").alias("min_map"),
+            F.avg("Derived_HRV").alias("avg_hrv"),
+            F.max("Derived_HRV").alias("max_hrv"),
+            F.min("Derived_HRV").alias("min_hrv"),
+            F.stddev("Heart Rate").alias("std_hr"),
+            F.count("*").alias("n_samples")
         )
     )
 
