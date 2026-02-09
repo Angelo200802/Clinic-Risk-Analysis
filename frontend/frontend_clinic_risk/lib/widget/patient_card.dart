@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend_clinic_risk/widget/classification_panel.dart';
+import '../types/sensorUpdate.dart';
 
 class PatientMiniCard extends StatefulWidget {
   final SensorUpdate patient; // Il tuo oggetto SensorUpdate
@@ -219,29 +219,76 @@ class TriageMasterView extends StatelessWidget {
         .where((p) => p.prediction.toLowerCase() != "high risk")
         .toList();
 
+    double screenWidth = MediaQuery.of(context).size.width;
+    double gap = (screenWidth * 0.02).clamp(8.0, 32.0);
+
     return Container(
-      color: Colors.black12,
+      padding: EdgeInsets.all(gap), // Margine esterno variabile
       child: Row(
         children: [
-          // COLONNA CRITICI
+          // BOX ALTO RISCHIO
           Expanded(
             child: _buildTriageColumn(
               title: "High Risk",
               count: criticalPatients.length,
               color: Colors.redAccent,
               patients: criticalPatients,
+              glowColor: Colors.redAccent.withOpacity(0.05),
             ),
           ),
 
-          const VerticalDivider(width: 1, color: Colors.white10),
+          // Distanziatore responsive
+          SizedBox(width: gap),
 
-          // COLONNA STABILI
+          // BOX BASSO RISCHIO
           Expanded(
             child: _buildTriageColumn(
               title: "Low Risk",
               count: stablePatients.length,
               color: Colors.greenAccent,
               patients: stablePatients,
+              glowColor: Colors.transparent, // Niente glow per chi sta bene
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(Color color) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icona con un leggero bagliore soffuso
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.05),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.assignment_turned_in_outlined,
+              color: color.withOpacity(0.4),
+              size: 40,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "NESSUN PAZIENTE",
+            style: TextStyle(
+              color: color.withOpacity(0.5),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "In questa categoria",
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.2),
+              fontSize: 11,
             ),
           ),
         ],
@@ -254,56 +301,90 @@ class TriageMasterView extends StatelessWidget {
     required int count,
     required Color color,
     required List<SensorUpdate> patients,
+    required Color glowColor,
   }) {
-    return Column(
-      children: [
-        // Header della colonna
-        Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(
+          0xFF1A1A1A,
+        ), // Sfondo box leggermente più chiaro del fondo app
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: color.withOpacity(
+            0.2,
+          ), // Bordo sottile colorato per richiamare lo stato
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(color: glowColor, blurRadius: 20, spreadRadius: 2),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header del Box
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.analytics_outlined, color: color, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  "$count",
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                // Badge numerico
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: color.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    "$count",
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        // Lista effettiva
-        Expanded(
-          child: ListView.builder(
-            itemCount: patients.length,
-            itemBuilder: (context, index) {
-              final patient = patients[index];
-              return PatientMiniCard(
-                patient: patient,
-                isSelected: patient.patientId == selectedPatientId,
-                onTap: () => onPatientSelected(patient),
-              );
-            },
+
+          const Divider(height: 1, color: Colors.white10),
+
+          // Lista pazienti
+          Expanded(
+            child: patients.isEmpty
+                ? _buildEmptyState(color)
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: patients.length,
+                    itemBuilder: (context, index) => PatientMiniCard(
+                      patient: patients[index],
+                      isSelected:
+                          patients[index].patientId == selectedPatientId,
+                      onTap: () => onPatientSelected(patients[index]),
+                    ),
+                  ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

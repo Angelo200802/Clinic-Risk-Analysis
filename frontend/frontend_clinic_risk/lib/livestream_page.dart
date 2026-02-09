@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'widget/classification_panel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widget/patient_card.dart';
-
-class Trend {}
+import 'types/trend.dart';
+import 'types/sensorUpdate.dart';
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -22,7 +22,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   bool _isConnected = false;
   bool _isConnecting = false;
   Map<int, SensorUpdate> allPatients = {};
-  Map<int, Trend> allTrends = {};
+  Map<int, List<Trend>> allTrends = {};
   SensorUpdate? _lastUpdate;
   int? selectedPatientId;
 
@@ -57,10 +57,17 @@ class _LivestreamPageState extends State<LivestreamPage> {
               allPatients[sensorUpdate.patientId] = sensorUpdate;
               _lastUpdate = sensorUpdate;
             });
-          } else {
-            debugPrint(
-              "Messaggio di tipo sconosciuto ricevuto: \n${data['data']}",
-            );
+          } else if (data['type'] == 'trend') {
+            Trend trend = Trend.fromJson(data['data']);
+            setState(() {
+              allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
+              allTrends[trend.patientId]!.add(trend);
+              DateTime actualTime = DateTime.parse(trend.start);
+              allTrends[trend.patientId]?.removeWhere((t) {
+                DateTime startTime = DateTime.parse(t.start);
+                return actualTime.difference(startTime).inMinutes > 5;
+              });
+            });
           }
         } catch (e) {
           debugPrint("Parsing error: $e");

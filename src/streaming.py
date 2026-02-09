@@ -147,13 +147,18 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
         )
 
         for row in df_with_trend.collect():
+            dict_row = row.asDict()
+            dict_row['start'] = dict_row['window'].start.isoformat()
+            dict_row['end'] = dict_row['window'].end.isoformat()    
+            dict_row.pop('window')
             bus.main_loop.call_soon_threadsafe(
                 bus.data_queue.put_nowait, 
                 {
                     "type" : "trend",
-                    "data" : row.asDict()
+                    "data" : dict_row
                 }
             )
+            logging.info(f"Trend calcolato per Patient ID {row['Patient ID']}\n {row.asDict()}")
 
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
         df_with_trend.select(
