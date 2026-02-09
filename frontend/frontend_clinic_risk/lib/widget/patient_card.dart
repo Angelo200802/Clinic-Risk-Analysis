@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend_clinic_risk/widget/classification_panel.dart';
 
 class PatientMiniCard extends StatefulWidget {
-  final SensorUpdate patient; // Oggetto che contiene i dati
+  final SensorUpdate patient; // Il tuo oggetto SensorUpdate
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -26,35 +26,19 @@ class _PatientMiniCardState extends State<PatientMiniCard>
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
-      lowerBound: 0.9,
-      upperBound: 1.1,
+      duration: const Duration(milliseconds: 400),
+      lowerBound: 0.95,
+      upperBound: 1.05,
     );
   }
 
-  // Eseguiamo l'animazione ogni volta che il battito cambia
   @override
   void didUpdateWidget(PatientMiniCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.patient != oldWidget.patient) {
+    // Trigger dell'animazione al cambio dei BPM
+    if (widget.patient.heartRate != oldWidget.patient.heartRate) {
       _pulseController.forward().then((_) => _pulseController.reverse());
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _pulseController,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          // ... resto del design della card ...
-          child: Text(
-            "${widget.patient.heartRate} Heart Rate",
-          ), // Esempio di dato da visualizzare
-        ),
-      ),
-    );
   }
 
   @override
@@ -62,10 +46,159 @@ class _PatientMiniCardState extends State<PatientMiniCard>
     _pulseController.dispose();
     super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) {
+    // Logica di stato (personalizzala in base ai tuoi threshold)
+    final bool isCritical =
+        widget.patient.prediction.toLowerCase() == "high risk";
+    final Color statusColor = isCritical
+        ? Colors.redAccent
+        : Colors.greenAccent;
+
+    return ScaleTransition(
+      scale: _pulseController,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                widget.isSelected
+                    ? const Color(0xFF37474F)
+                    : const Color(0xFF2C2C2C),
+                widget.isSelected
+                    ? const Color(0xFF263238)
+                    : const Color(0xFF1A1A1A),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            // Bordo neon se selezionata
+            border: Border.all(
+              color: widget.isSelected
+                  ? Colors.blueAccent.withOpacity(0.8)
+                  : Colors.white.withOpacity(0.05),
+              width: 1.5,
+            ),
+            // Glow dinamico: rosso se critico, blu se selezionato
+            boxShadow: [
+              if (isCritical)
+                BoxShadow(
+                  color: Colors.redAccent.withOpacity(0.2),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              if (widget.isSelected)
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(0.3),
+                  blurRadius: 15,
+                  spreadRadius: 1,
+                ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              children: [
+                // Indicatore di stato verticale (Barra laterale)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    width: 6,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      boxShadow: [BoxShadow(color: statusColor, blurRadius: 6)],
+                    ),
+                  ),
+                ),
+                // Contenuto Card
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
+                  child: Row(
+                    children: [
+                      // Info Paziente
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "PATIENT ID",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.4),
+                                fontSize: 9,
+                                letterSpacing: 1.5,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.patient.patientId.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily:
+                                    'monospace', // Garantisce stabilità visiva
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Dato Vitale (BPM)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.favorite,
+                                color: statusColor,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${widget.patient.heartRate}",
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'monospace',
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            "BPM",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.5),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class TriageMasterView extends StatelessWidget {
-  final List<SensorUpdate> allPatients;
+  final Map<int, SensorUpdate> allPatients;
   final int? selectedPatientId;
   final Function(SensorUpdate) onPatientSelected;
 
@@ -79,11 +212,11 @@ class TriageMasterView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Filtriamo i pazienti in base allo stato
-    final criticalPatients = allPatients
-        .where((SensorUpdate p) => p.prediction.toLowerCase() == "high risk")
+    final criticalPatients = allPatients.values
+        .where((p) => p.prediction.toLowerCase() == "high risk")
         .toList();
-    final stablePatients = allPatients
-        .where((SensorUpdate p) => p.prediction.toLowerCase() != "high risk")
+    final stablePatients = allPatients.values
+        .where((p) => p.prediction.toLowerCase() != "high risk")
         .toList();
 
     return Container(
@@ -93,7 +226,7 @@ class TriageMasterView extends StatelessWidget {
           // COLONNA CRITICI
           Expanded(
             child: _buildTriageColumn(
-              title: "CRITICI",
+              title: "High Risk",
               count: criticalPatients.length,
               color: Colors.redAccent,
               patients: criticalPatients,
@@ -105,7 +238,7 @@ class TriageMasterView extends StatelessWidget {
           // COLONNA STABILI
           Expanded(
             child: _buildTriageColumn(
-              title: "STABILI",
+              title: "Low Risk",
               count: stablePatients.length,
               color: Colors.greenAccent,
               patients: stablePatients,

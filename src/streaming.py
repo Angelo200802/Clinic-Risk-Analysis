@@ -146,6 +146,15 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             )
         )
 
+        for row in df_with_trend.collect():
+            bus.main_loop.call_soon_threadsafe(
+                bus.data_queue.put_nowait, 
+                {
+                    "type" : "trend",
+                    "data" : row.asDict()
+                }
+            )
+
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
         df_with_trend.select(
             "Patient ID",

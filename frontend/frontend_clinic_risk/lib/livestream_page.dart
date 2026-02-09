@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'widget/classification_panel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widget/patient_card.dart';
+
+class Trend {}
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -14,29 +18,72 @@ class LivestreamPage extends StatefulWidget {
 
 class _LivestreamPageState extends State<LivestreamPage> {
   late WebSocketChannel _channel;
+  Timer? _reconnectTimer;
   bool _isConnected = false;
-  bool _isConnecting = true;
-  List<SensorUpdate> allPatients = [];
+  bool _isConnecting = false;
+  Map<int, SensorUpdate> allPatients = {};
+  Map<int, Trend> allTrends = {};
+  SensorUpdate? _lastUpdate;
   int? selectedPatientId;
 
   void _connect() async {
+    if (!mounted || _isConnecting) return;
+
+    setState(() {
+      _isConnecting = true;
+    });
+
     try {
       _channel = WebSocketChannel.connect(
         Uri.parse(dotenv.env['WS_STREAMING']!),
       );
 
-      // Aspetta che il protocollo WebSocket sia effettivamente stabilito
       await _channel.ready;
 
-      setState(() {
-        _isConnected = true;
-        _isConnecting = false;
+      if (mounted) {
+        setState(() {
+          _isConnected = true;
+          _isConnecting = false;
+        });
+      }
+
+      // Fondamentale: ascoltiamo lo stream qui per gestire la disconnessione
+      _channel.stream.listen((message) {
+        try {
+          final data = jsonDecode(message);
+          if (data['type'] == 'prediction') {
+            SensorUpdate sensorUpdate = SensorUpdate.fromJson(data['data']);
+            setState(() {
+              allPatients[sensorUpdate.patientId] = sensorUpdate;
+              _lastUpdate = sensorUpdate;
+            });
+          } else {
+            debugPrint(
+              "Messaggio di tipo sconosciuto ricevuto: \n${data['data']}",
+            );
+          }
+        } catch (e) {
+          debugPrint("Parsing error: $e");
+        }
       });
     } catch (e) {
       debugPrint("Errore di connessione: $e");
+      _handleRetry();
+    }
+  }
+
+  void _handleRetry() {
+    if (mounted) {
       setState(() {
         _isConnected = false;
         _isConnecting = false;
+      });
+
+      // Annulla eventuali timer precedenti e ne avvia uno nuovo
+      _reconnectTimer?.cancel();
+      _reconnectTimer = Timer(const Duration(seconds: 5), () {
+        debugPrint("Tentativo di riconnessione in corso...");
+        _connect();
       });
     }
   }
@@ -44,6 +91,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   @override
   void initState() {
     super.initState();
+    debugPrint("Inizializzazione LivestreamPage...");
     _connect();
   }
 
@@ -55,37 +103,10 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   Widget _buildStreamPanel() {
     return Center(
-      child: _isConnected
-          ? StreamBuilder(
-              stream: _channel.stream,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return Text(
-                    "Errore: ${snapshot.error}",
-                    style: TextStyle(color: Colors.red),
-                  );
-                }
-                if (!snapshot.hasData) {
-                  return const CircularProgressIndicator();
-                }
-                if (snapshot.hasData) {
-                  try {
-                    final data = jsonDecode(snapshot.data!);
-                    final sensorUpdate = SensorUpdate.fromJson(data['data']);
-                    allPatients.add(sensorUpdate);
-                    return LiveClassificationPane(
-                      sensorUpdate: sensorUpdate,
-                      isConnected: _isConnected,
-                    );
-                  } catch (e) {
-                    return Text('Error parsing data: $e');
-                  }
-                } else if (snapshot.hasError) {
-                  return Text('WebSocket error: ${snapshot.error}');
-                } else {
-                  return const CircularProgressIndicator();
-                }
-              },
+      child: _isConnected && _lastUpdate != null
+          ? LiveClassificationPane(
+              sensorUpdate: _lastUpdate!,
+              isConnected: _isConnected,
             )
           : LiveClassificationPane(
               sensorUpdate: SensorUpdate(
@@ -107,7 +128,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                 derivedMap: 0,
                 prediction: "",
               ),
-              isConnected: _isConnected,
+              isConnected: _isConnected ? false : _isConnected,
             ),
     );
   }
