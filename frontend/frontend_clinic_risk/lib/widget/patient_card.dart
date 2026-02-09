@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import '../types/sensorUpdate.dart';
 
@@ -47,6 +49,99 @@ class _PatientMiniCardState extends State<PatientMiniCard>
     super.dispose();
   }
 
+  void _showFullStats(BuildContext context, SensorUpdate patient) {
+    showDialog(
+      context: context,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: 5,
+          sigmaY: 5,
+        ), // Effetto vetro sullo sfondo
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.analytics, color: Colors.blueAccent),
+              const SizedBox(width: 10),
+              Text(
+                "Patient Summary: ${patient.patientId}",
+                style: const TextStyle(color: Colors.white, fontSize: 18),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildStatRow("Heart Rate", "${patient.heartRate} BPM"),
+                _buildStatRow("Respiratory Rate", "${patient.respiratoryRate}"),
+                _buildStatRow("SpO2", "${patient.oxygenSaturation}%"),
+                _buildStatRow(
+                  "Systolic Blood Pressure",
+                  "${patient.systolicBloodPressure} mmHg",
+                ),
+                _buildStatRow(
+                  "Diastolic Blood Pressure",
+                  "${patient.diastolicBloodPressure} mmHg",
+                ),
+                _buildStatRow("Age", "${patient.age} y.o."),
+                _buildStatRow("Gender", patient.gender),
+                _buildStatRow(
+                  "Body Temperature",
+                  "${patient.bodyTemperature} °C",
+                ),
+                _buildStatRow("Height", "${patient.height} m"),
+                _buildStatRow("Weight", "${patient.weight} kg"),
+                _buildStatRow("BMI", "${patient.derivedBmi}"),
+                _buildStatRow("MAP", "${patient.derivedMap} mmHg"),
+                _buildStatRow("HRV", "${patient.derivedHrv} ms"),
+                _buildStatRow(
+                  "Pulse Pressure",
+                  "${patient.derivedPulsePressure} mmHg",
+                ),
+                _buildStatRow("Risk Status", patient.prediction.toUpperCase()),
+                _buildStatRow("Last Update", patient.timestamp),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                "CLOSE",
+                style: TextStyle(color: Colors.blueAccent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.6))),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Logica di stato (personalizzala in base ai tuoi threshold)
@@ -84,7 +179,6 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                   : Colors.white.withOpacity(0.05),
               width: 1.5,
             ),
-            // Glow dinamico: rosso se critico, blu se selezionato
             boxShadow: [
               if (isCritical)
                 BoxShadow(
@@ -151,7 +245,26 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                           ],
                         ),
                       ),
-                      // Dato Vitale (BPM)
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: IconButton(
+                            icon: Icon(
+                              Icons.visibility_outlined,
+                              size: 18,
+                              color: Colors.white.withOpacity(0.4),
+                            ),
+                            hoverColor: Colors.blueAccent.withOpacity(0.1),
+                            splashRadius: 20,
+                            onPressed: () {
+                              // Qui chiamiamo la funzione per vedere le statistiche complete
+                              _showFullStats(context, widget.patient);
+                            },
+                          ),
+                        ),
+                      ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [

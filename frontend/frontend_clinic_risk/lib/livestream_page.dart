@@ -1,6 +1,5 @@
 import 'dart:async';
-
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Chip;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'widget/classification_panel.dart';
@@ -8,6 +7,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widget/patient_card.dart';
 import 'types/trend.dart';
 import 'types/sensorUpdate.dart';
+import 'widget/trend_graph.dart';
+import 'widget/chip.dart';
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -25,6 +26,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   Map<int, List<Trend>> allTrends = {};
   SensorUpdate? _lastUpdate;
   int? selectedPatientId;
+  String label = "Heart Rate";
 
   void _connect() async {
     if (!mounted || _isConnecting) return;
@@ -140,33 +142,223 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
+  Widget _buildEmptyChartPlaceholder() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.show_chart,
+            size: 60,
+            color: Colors.white.withOpacity(0.05),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "In attesa di selezione...",
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.2),
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderChips() {
+    return Wrap(
+      spacing: 6.0, // Distanza tra i chip
+      children: [
+        Chip(
+          "Shock Risk ⚠️",
+          isActive:
+              allTrends[selectedPatientId]?.isNotEmpty == true &&
+              allTrends[selectedPatientId]!.last.shockRisk,
+        ),
+        Chip(
+          "Resp Failure ⚠️",
+          isActive:
+              allTrends[selectedPatientId]?.isNotEmpty == true &&
+              allTrends[selectedPatientId]!.last.respFailureRisk,
+        ),
+        Chip(
+          "Sepsis Risk ⚠️",
+          isActive:
+              allTrends[selectedPatientId]?.isNotEmpty == true &&
+              allTrends[selectedPatientId]!.last.sepsisRisk,
+        ),
+        Chip(
+          "Hemo Instability ⚠️",
+          isAlert:
+              allTrends[selectedPatientId]?.isNotEmpty == true &&
+              allTrends[selectedPatientId]!.last.hemoInstability,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChartQuadrante() {
+    final selectedPatient = allPatients[selectedPatientId];
+
+    return Container(
+      margin: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // 1. HEADER DEL GRAFICO
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "LIVE TREND ANALYSIS",
+                      style: TextStyle(
+                        color: Colors.blueAccent.withOpacity(0.8),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      selectedPatient != null
+                          ? "Patient: ${selectedPatient.patientId}"
+                          : "Seleziona un paziente",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (selectedPatient != null) _buildHeaderChips(),
+                  ],
+                ),
+                if (selectedPatient != null)
+                  _buildLiveBadge(selectedPatient.heartRate),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, color: Colors.white10),
+
+          // 2. AREA DEL GRAFICO
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(15, 20, 20, 10),
+              child: selectedPatient != null
+                  ? PatientTrendChart(
+                      history: allTrends[selectedPatientId] ?? [],
+                      lineColor: Colors.blueAccent,
+                      label: label,
+                    )
+                  : _buildEmptyChartPlaceholder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget per il piccolo badge pulsante con il valore attuale
+  Widget _buildLiveBadge(int value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.blueAccent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.sensors, color: Colors.blueAccent, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            "$value $label",
+            style: const TextStyle(
+              color: Colors.blueAccent,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Il Container alla riga 81 del tuo main.dart
         color: const Color.fromARGB(255, 46, 46, 46),
-        child: Row(
-          // Il Row alla riga 71
+        child: Column(
+          // Organizziamo lo schermo in due grandi righe (Top e Bottom)
           children: [
-            // 1. IL PANNELLO STREAM DEVE AVERE UN LIMITE
-            // Se lo stream_panel contiene una lista, avvolgilo in Expanded o SizedBox
+            // RIGA SUPERIORE (Quadranti 1 e 2)
             Expanded(
-              flex: 2, // Prende 2 parti dello spazio
-              child: _buildStreamPanel(),
+              flex: 1, // Metà dell'altezza totale
+              child: Row(
+                children: [
+                  // 1° Quadrante: Stream Panel
+                  Expanded(child: _buildStreamPanel()),
+                  // 2° Quadrante: Placeholder (non ancora definito)
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          "Analisi Predittiva (Prossimamente)",
+                          style: TextStyle(color: Colors.white24),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
 
-            // 2. IL TRIAGE MASTER DEVE AVERE UN LIMITE
+            // RIGA INFERIORE (Quadranti 3 e 4)
             Expanded(
-              flex: 3, // Prende 3 parti dello spazio
-              child: TriageMasterView(
-                allPatients: allPatients,
-                selectedPatientId: selectedPatientId,
-                onPatientSelected: (p) {
-                  setState(() {
-                    selectedPatientId = p.patientId;
-                  });
-                },
+              flex: 1, // L'altra metà dell'altezza
+              child: Row(
+                children: [
+                  // 3° Quadrante: Pannello con il grafico
+                  Expanded(
+                    child:
+                        _buildChartQuadrante(), // <--- Sostituisci il vecchio Container qui
+                  ),
+                  // 4° Quadrante: Triage Master View (le due liste)
+                  Expanded(
+                    child: TriageMasterView(
+                      allPatients: allPatients,
+                      selectedPatientId: selectedPatientId,
+                      onPatientSelected: (p) {
+                        setState(() {
+                          selectedPatientId = p.patientId;
+                        });
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

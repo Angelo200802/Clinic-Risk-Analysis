@@ -24,10 +24,10 @@ class Trend {
   final double mapDelta;
   final double spo2Delta;
   final double hrvDelta;
-  final int shockRisk;
-  final int respFailureRisk;
-  final int sepsisRisk;
-  final int hemoInstability;
+  final bool shockRisk;
+  final bool respFailureRisk;
+  final bool sepsisRisk;
+  final bool hemoInstability;
   final int clinicalRiskScore;
   final String start;
   final String end;
@@ -67,6 +67,25 @@ class Trend {
     required this.end,
   });
 
+  double fromLabel(String label) {
+    switch (label) {
+      case "Heart Rate":
+        return avgHr;
+      case "Respiratory Rate":
+        return avgRr;
+      case "SpO2":
+        return avgSpo2;
+      case "Temperature":
+        return avgTemp;
+      case "Mean Arterial Pressure":
+        return avgMap;
+      case "Heart Rate Variability":
+        return avgHrv;
+      default:
+        throw Exception("Label non riconosciuto: $label");
+    }
+  }
+
   factory Trend.fromJson(Map<String, dynamic> json) {
     return Trend(
       patientId: json['Patient ID'] ?? 0,
@@ -94,10 +113,10 @@ class Trend {
       mapDelta: (json['map_delta'] as num? ?? 0.0).toDouble(),
       spo2Delta: (json['spo2_delta'] as num? ?? 0.0).toDouble(),
       hrvDelta: (json['hrv_delta'] as num? ?? 0.0).toDouble(),
-      shockRisk: json['shock_risk'] ?? 0,
-      respFailureRisk: json['resp_failure_risk'] ?? 0,
-      sepsisRisk: json['sepsis_risk'] ?? 0,
-      hemoInstability: json['hemo_instability'] ?? 0,
+      shockRisk: json['shock_risk'] == 1,
+      respFailureRisk: json['resp_failure_risk'] == 1,
+      sepsisRisk: json['sepsis_risk'] == 1,
+      hemoInstability: json['hemo_instability'] == 1,
       clinicalRiskScore: json['clinical_risk_score'] ?? 0,
       start: json['start'] ?? '',
       end: json['end'] ?? '',
