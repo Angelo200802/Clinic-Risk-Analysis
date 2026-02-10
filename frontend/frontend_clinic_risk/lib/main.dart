@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:frontend_clinic_risk/livestream_page.dart';
 import 'widget/sidebar.dart';
+import 'history_page.dart';
+import 'analytics.dart';
+import 'evaluation.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: ".env");
@@ -43,11 +46,11 @@ class _DashboardPageState extends State<DashboardPage> {
       if (selectedIndex == 0) {
         return LivestreamPage();
       } else if (selectedIndex == 1) {
-        return const Center(child: Text("Patient History"));
+        return HistoryPage();
       } else if (selectedIndex == 2) {
-        return const Center(child: Text("Analytics"));
+        return AnalyticsPage();
       } else if (selectedIndex == 3) {
-        return const Center(child: Text("Evaluation"));
+        return EvaluationPage();
       }
       return const Center();
     }
