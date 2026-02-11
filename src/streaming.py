@@ -115,9 +115,16 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
         df_with_trend = (
             df_stats
             .withColumn("prev_avg_hr", F.lag("avg_hr").over(patient_window))
+            .withColumn("prev_avg_hr_lag", F.lag("avg_hr", 2).over(patient_window))
+            .withColumn("prev_avg_rr", F.lag("avg_rr").over(patient_window))
+            .withColumn("prev_avg_rr_lag", F.lag("avg_rr", 2).over(patient_window))
             .withColumn("prev_avg_map", F.lag("avg_map").over(patient_window))
+            .withColumn("prev_avg_map_lag", F.lag("avg_map", 2).over(patient_window))
             .withColumn("prev_avg_spo2", F.lag("avg_spo2").over(patient_window))
+            .withColumn("prev_avg_spo2_lag", F.lag("avg_spo2", 2).over(patient_window))
             .withColumn("prev_avg_hrv", F.lag("avg_hrv").over(patient_window))
+            .withColumn("prev_avg_hrv_lag", F.lag("avg_hrv", 2).over(patient_window))
+            .withColumn("prev_avg_pp", F.lag("avg_pp").over(patient_window))
             .withColumn("hr_delta", F.col("avg_hr") - F.col("prev_avg_hr"))
             .withColumn("map_delta", F.col("avg_map") - F.col("prev_avg_map"))
             .withColumn("spo2_delta", F.col("avg_spo2") - F.col("prev_avg_spo2"))
@@ -130,7 +137,7 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
                 .otherwise("OBESE")
             )
             .withColumn(
-                "hr_pct_delta",
+                "hr_pct",
                 F.when(
                     (F.col("prev_avg_hr").isNull()) | (F.col("prev_avg_hr") == 0),
                     None
@@ -139,44 +146,102 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
                 )
             )
             .withColumn(
-                "shock_risk",
+                "rr_pct",
                 F.when(
-                    (F.col("hr_delta") > 5) &
-                    (F.col("map_delta") < -3),
-                    F.lit(1)
-                ).otherwise(F.lit(0))
+                    (F.col("prev_avg_rr").isNull()) | (F.col("prev_avg_rr") == 0),
+                    None
+                ).otherwise(
+                    (F.col("avg_rr") - F.col("prev_avg_rr")) / F.col("prev_avg_rr") * 100
+                )
+            )   
+            .withColumn(
+                "spo2_pct",
+                F.when(
+                    (F.col("prev_avg_spo2").isNull()) | (F.col("prev_avg_spo2") == 0),
+                    None
+                ).otherwise(
+                    (F.col("avg_spo2") - F.col("prev_avg_spo2")) / F.col("prev_avg_spo2") * 100
+                )
             )
             .withColumn(
-                "resp_failure_risk",
+                "pp_pct",
                 F.when(
-                    (F.col("avg_rr") > 24) &
-                    (F.col("spo2_delta") < -2),
-                    F.lit(1)
-                ).otherwise(F.lit(0))
+                    (F.col("prev_avg_pp").isNull()) | (F.col("prev_avg_pp") == 0),
+                    None
+                ).otherwise(
+                    (F.col("avg_pp") - F.col("prev_avg_pp")) / F.col("prev_avg_pp") * 100
+                )
             )
             .withColumn(
-                "sepsis_risk",
+                "map_pct",
+                F.when(
+                    (F.col("prev_avg_map").isNull()) | (F.col("prev_avg_map") == 0),
+                    None
+                ).otherwise(
+                    (F.col("avg_map") - F.col("prev_avg_map")) / F.col("prev_avg_map") * 100
+                )
+            )
+            .withColumn(
+                "progressive_hemo_deterioration",
+                F.when(
+                    (F.col("avg_hr") > F.col("prev_avg_hr")) &
+                    (F.col("prev_avg_hr") > F.col("prev_avg_hr_lag")) &
+                    (F.col("avg_map") < F.col("prev_avg_map")) &
+                    (F.col("prev_avg_map") < F.col("prev_avg_map_lag")),
+                    1
+                ).otherwise(0)
+            )
+            .withColumn(
+                "progressive_resp_failure_pattern",
+                F.when(
+                    (F.col("avg_rr") > F.col("prev_avg_rr")) &
+                    (F.col("prev_avg_rr") > F.col("prev_avg_rr_lag")) &
+                    (F.col("avg_spo2") < F.col("prev_avg_spo2")) &
+                    (F.col("prev_avg_spo2") < F.col("prev_avg_spo2_lag")),
+                    1
+                ).otherwise(0)
+            )
+            .withColumn(
+                "dynamic_sepsis_pattern",
                 F.when(
                     (F.col("avg_temp") > 38) &
-                    (F.col("hr_delta") > 5) &
-                    (F.col("hrv_delta") < -0.1),
-                    F.lit(1)
-                ).otherwise(F.lit(0))
+                    (F.col("avg_hr") > F.col("prev_avg_hr")) &
+                    (F.col("prev_avg_hr") > F.col("prev_avg_hr_lag")) &
+                    (F.col("avg_hrv") < F.col("prev_avg_hrv")) &
+                    (F.col("prev_avg_hrv") < F.col("prev_avg_hrv_lag")),
+                    1
+                ).otherwise(0)
             )
             .withColumn(
-                "hemo_instability",
-                F.when(
-                    F.col("std_hr") > 10,
-                    F.lit(1)
-                ).otherwise(F.lit(0))
+                "shock_index",
+                F.col("avg_hr") / F.col("avg_sbp")
             )
             .withColumn(
-                "clinical_risk_score",
-                F.col("shock_risk") * 3 +
-                F.col("resp_failure_risk") * 2 +
-                F.col("sepsis_risk") * 3 +
-                F.col("hemo_instability")
+                "modified_shock_index",
+                F.col("avg_hr") / F.col("avg_map")
             )
+            .withColumn(
+                "age_index",
+                F.col("Age") * F.col("shock_index")
+            )
+            .withColumn(
+                "diastolic_shock_index",
+                F.col("avg_hr") / F.col("avg_dbp")
+            )
+            .withColumn(
+                "rate_pp",
+                F.col("avg_sbp") * F.col("avg_hr")
+            )
+            .withColumn(
+                "pp_index",
+                F.col("avg_pp") / F.col("avg_hr")
+            )
+            .withColumn(
+                "rox_index",
+                F.col("avg_spo2") / F.col("avg_rr")
+            )
+
+            
         )
 
         for row in df_with_trend.collect():
@@ -190,8 +255,23 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
                         k : v for k, v in dict_row.items() if k in columns
                     },
                     "trend_update" : {
-                        k : v for k, v in dict_row.items() if k not in columns and k not in ["prev_avg_hr","prev_avg_map","prev_avg_spo2","prev_avg_hrv"]
-                    }   
+                        k : v for k, v in dict_row.items() 
+                        if k not in columns 
+                        and 'prev' not in k 
+                        and 'index' not in k
+                        and 'pattern' not in k
+                        and 'rate_pp' not in k
+                        and 'delta' not in k
+                    } ,
+                    "index" : {
+                        k : v for k, v in dict_row.items() 
+                        if 'index' in k 
+                        or 'rate_pp' in k
+                    } ,
+                    "pattern" :{
+                        k : v for k, v in dict_row.items() 
+                        if 'pattern' in k or 'deterioration' in k
+                    }
                 }
             update['sensor_update']['Patient ID'] = dict_row['Patient ID']
             update['sensor_update']['Timestamp'] = dict_row['Timestamp']
@@ -202,20 +282,6 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             logging.info(f"Trend calcolato per Patient ID {row['Patient ID']}\n {update}")
 
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
-        df_with_trend.select(
-            "Patient ID",
-            "window.start",
-            "n_samples",
-            "avg_hr", "hr_delta",
-            "avg_map", "map_delta",
-            "avg_spo2", "spo2_delta",
-            "avg_hrv", "hrv_delta",
-            "shock_risk",
-            "resp_failure_risk",
-            "sepsis_risk",
-            "hemo_instability",
-            "clinical_risk_score"
-        ).show(truncate=False)
 
 def start_streaming():
 
@@ -260,23 +326,14 @@ def start_streaming():
                 F.when(F.lower(F.col("Prediction")) == "high risk", 1).otherwise(0)
             ).alias("risk_ratio"),
             F.avg("Heart Rate").alias("avg_hr"),
-            F.max("Heart Rate").alias("max_hr"),
-            F.min("Heart Rate").alias("min_hr"),
+            F.avg("Systolic Blood Pressure").alias("avg_sbp"),
+            F.avg("Diastolic Blood Pressure").alias("avg_dbp"),
             F.avg("Respiratory Rate").alias("avg_rr"),
-            F.max("Respiratory Rate").alias("max_rr"),
-            F.min("Respiratory Rate").alias("min_rr"),
             F.avg("Oxygen Saturation").alias("avg_spo2"),
-            F.max("Oxygen Saturation").alias("max_spo2"),
-            F.min("Oxygen Saturation").alias("min_spo2"),
             F.avg("Body Temperature").alias("avg_temp"),
-            F.max("Body Temperature").alias("max_temp"),
-            F.min("Body Temperature").alias("min_temp"),
             F.avg("Derived_MAP").alias("avg_map"),
-            F.max("Derived_MAP").alias("max_map"),
-            F.min("Derived_MAP").alias("min_map"),
+            F.avg("Derived_Pulse_Pressure").alias("avg_pp"),
             F.avg("Derived_HRV").alias("avg_hrv"),
-            F.max("Derived_HRV").alias("max_hrv"),
-            F.min("Derived_HRV").alias("min_hrv"),
             F.stddev("Heart Rate").alias("std_hr"),
             F.count("*").alias("n_samples")
         )
@@ -289,7 +346,7 @@ def start_streaming():
         .start()
     )
 
-    return [query_stats]#,classification_query]
+    return [query_stats]
 
 @router_streaming.get("/getseed")
 def get_seed():

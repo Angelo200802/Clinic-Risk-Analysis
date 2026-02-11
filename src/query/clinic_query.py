@@ -14,7 +14,62 @@ router_clinic_query = APIRouter()
 ds : DataFrame = load_dataset(os.getenv("DATASET_PATH"))
 
 @router_clinic_query.get("/clinic/shockindex")
-def get_shock_index(order: str = "desc"):
+def get_shock_index():
+    shock_index_df = (
+        ds
+        .withColumn("ShockIndex", F.col("Heart Rate") / F.col("Systolic Blood Pressure"))
+        .withColumn("ModifiedShockIndex", F.col("Heart Rate") / F.col("Derived_MAP"))
+        .withColumn("AgeShockIndex", F.col("ShockIndex") * F.col("Age"))
+        .withColumn("DiastolicShockIndex", F.col("Heart Rate") / F.col("Diastolic Blood Pressure"))
+    )
+    shock_index_stats = shock_index_df.select(
+        F.col("Patient ID"), 
+        F.col("Heart Rate"), 
+        F.col("Systolic Blood Pressure"), 
+        F.col("ShockIndex"),
+        F.col("ModifiedShockIndex"), 
+        F.col("AgeShockIndex"), 
+        F.col("DiastolicShockIndex")
+    )
+
+    return {
+        "data": shock_index_stats.toPandas().head(5).to_dict(orient="records")
+    }
+
+
+@router_clinic_query.get("/clinic/roxindex")
+def get_rox_index():
+    rox_index_df = ds.withColumn("ROXIndex", F.col("Oxygen Saturation") / F.col("Respiratory Rate"))
+    rox_index_stats = rox_index_df.select(
+        F.col("Patient ID"),
+        F.col("Oxygen Saturation"), 
+        F.col("Respiratory Rate"),
+        F.col("ROXIndex"),
+    )
+
+    return {
+        "data": rox_index_stats.toPandas().head(5).to_dict(orient="records")    
+    }
+
+
+@router_clinic_query.get("/clinic/pulsepressureindex")
+def get_pulse_pressure_index():
+    ppi_df = ds.withColumn("PulsePressureIndex", F.col("Derived_Pulse_Pressure") / F.col("Heart Rate"))
+    ppi_stats = ppi_df.select(
+        F.col("Patient ID"), 
+        F.col("Systolic Blood Pressure"), 
+        F.col("Diastolic Blood Pressure"), 
+        F.col("Derived_Pulse_Pressure"), 
+        F.col("Heart Rate"), 
+        F.col("PulsePressureIndex")
+    )
+
+    return {
+        "data": ppi_stats.toPandas().head(5).to_dict(orient="records")    
+    }
+
+@router_clinic_query.get("/clinic/shockpatients")
+def get_shock_patient(order: str = "desc"):
     shock_df = ds \
         .withColumn(
             "ShockIndex", 
@@ -29,73 +84,6 @@ def get_shock_index(order: str = "desc"):
         "count": len(pd_shock),   
     }
 
-@router_clinic_query.get("/clinic/news2")
-def get_news2():
-
-    news_df = ds.withColumn(
-        "Score_RR", # Frequenza Respiratoria
-        F.when((F.col("Respiratory Rate") >= 25) | (F.col("Respiratory Rate") <= 8), 3)
-         .when(F.col("Respiratory Rate").between(21, 24), 2)
-         .when(F.col("Respiratory Rate").between(9, 11), 1)
-         .otherwise(0) # 12-20
-    ).withColumn(
-        "Score_SpO2", # Saturazione Ossigeno (Scala 1 standard)
-        F.when(F.col("Oxygen Saturation") <= 91, 3)
-         .when(F.col("Oxygen Saturation").between(92, 93), 2)
-         .when(F.col("Oxygen Saturation").between(94, 95), 1)
-         .otherwise(0) # >= 96
-    ).withColumn(
-        "Score_Temp", # Temperatura Corporea
-        F.when(F.col("Body Temperature") <= 35.0, 3)
-         .when(F.col("Body Temperature") >= 39.1, 2)
-         .when((F.col("Body Temperature") <= 36.0) | (F.col("Body Temperature").between(38.1, 39.0)), 1)
-         .otherwise(0) # 36.1 - 38.0
-    ).withColumn(
-        "Score_SBP", # Pressione Sistolica
-        F.when((F.col("Systolic Blood Pressure") <= 90) | (F.col("Systolic Blood Pressure") >= 220), 3)
-         .when(F.col("Systolic Blood Pressure").between(91, 100), 2)
-         .when(F.col("Systolic Blood Pressure").between(101, 110), 1)
-         .otherwise(0) # 111-219
-    ).withColumn(
-        "Score_HR", # Frequenza Cardiaca
-        F.when((F.col("Heart Rate") >= 131) | (F.col("Heart Rate") <= 40), 3)
-         .when(F.col("Heart Rate").between(111, 130), 2)
-         .when((F.col("Heart Rate").between(41, 50)) | (F.col("Heart Rate").between(91, 110)), 1)
-         .otherwise(0) # 51-90
-    ).withColumn(
-        "NEWS2_Total",
-        F.col("Score_RR") + F.col("Score_SpO2") + F.col("Score_Temp") + 
-        F.col("Score_SBP") + F.col("Score_HR")
-    ).filter(F.col("NEWS2_Total") >= 5).select(
-        "Patient ID", "Respiratory Rate", "Oxygen Saturation", "Body Temperature",
-        "Systolic Blood Pressure", "Heart Rate", "NEWS2_Total", "Risk Category"
-    )
-
-    pd_news2 = news_df.toPandas()
-    return {
-        "data": pd_news2.head(10).to_dict(orient="records"),
-        "count": len(pd_news2)
-    }
-
-@router_clinic_query.get("/clinic/differentialpressure")
-def get_differential_pressure(order: str = "desc"):
-    diff_pressure_df = ds \
-        .withColumn(
-            "DifferentialPressure", 
-            F.col("Systolic Blood Pressure") - F.col("Diastolic Blood Pressure")) \
-        .withColumn(
-            "Label", 
-            F.when(F.col("DifferentialPressure") > 60, "High")\
-                .otherwise(F.when(F.col("DifferentialPressure") < 25, "Low")\
-                .otherwise("Normal"))) \
-        .orderBy(F.col("DifferentialPressure").asc() if order == "asc" else F.col("DifferentialPressure").desc() ) \
-        .select("Patient ID","Systolic Blood Pressure", "Diastolic Blood Pressure", "DifferentialPressure", "Label")
-    pd_diff_pressure = diff_pressure_df.toPandas()  
-    logging.info(f"Number of patients analyzed for Differential Pressure: {len(pd_diff_pressure)}") 
-    return {
-        "data": pd_diff_pressure.head(10).to_dict(orient="records") 
-    }
-
 @router_clinic_query.get("/clinic/hemodynamicrisk")
 def get_hemodynamic_risk():
     hemodynamic_risk = ds.withColumn("Shock_Index", F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
@@ -106,20 +94,11 @@ def get_hemodynamic_risk():
         "data": hemodynamic_risk.toPandas().head(5).to_dict(orient="records")
     }
 
-
-@router_clinic_query.get("/clinic/differentialpressure/filter/{label}")
-def filter_differential_pressure(label: str, order: str = "desc"):
-    label = label.lower()
-    diff_pressure_df = ds \
-        .withColumn("DifferentialPressure", F.col("Systolic Blood Pressure") - F.col("Diastolic Blood Pressure")) \
-        .withColumn("Label", F.when(F.col("DifferentialPressure") > 60, "high").otherwise(F.when(F.col("DifferentialPressure") < 25, "low").otherwise("normal"))) \
-        .filter(F.col("Label") == label) \
-        .orderBy(F.col("DifferentialPressure").asc() if order == "asc" else F.col("DifferentialPressure").desc() ) \
-        .select("Patient ID","Systolic Blood Pressure", "Diastolic Blood Pressure", "DifferentialPressure", "Label")
-    pd_diff_pressure = diff_pressure_df.toPandas()
+@router_clinic_query.get("/clinic/ratepressure_product")
+def get_rate_pressure_product():
+    rate_pressure_product = ds.withColumn("Rate_Pressure_Product", F.col("Heart Rate") * F.col("Systolic Blood Pressure"))
     return {
-        "data": pd_diff_pressure.head(10).to_dict(orient="records"),
-        "count": len(pd_diff_pressure)
+        "data": rate_pressure_product.select("Patient ID", "Heart Rate", "Systolic Blood Pressure", "Rate_Pressure_Product").toPandas().head(5).to_dict(orient="records")
     }
 
 @router_clinic_query.get("/clinic/metabolic_effs")
