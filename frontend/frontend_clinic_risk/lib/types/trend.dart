@@ -29,6 +29,8 @@ class Trend {
   final bool sepsisRisk;
   final bool hemoInstability;
   final int clinicalRiskScore;
+  final String bmiClass;
+  final String timestamp;
   final String start;
   final String end;
 
@@ -65,6 +67,8 @@ class Trend {
     required this.clinicalRiskScore,
     required this.start,
     required this.end,
+    required this.timestamp,
+    required this.bmiClass,
   });
 
   double fromLabel(String label) {
@@ -77,10 +81,6 @@ class Trend {
         return avgSpo2;
       case "Temperature":
         return avgTemp;
-      case "Mean Arterial Pressure":
-        return avgMap;
-      case "Heart Rate Variability":
-        return avgHrv;
       default:
         throw Exception("Label non riconosciuto: $label");
     }
@@ -120,6 +120,8 @@ class Trend {
       clinicalRiskScore: json['clinical_risk_score'] ?? 0,
       start: json['start'] ?? '',
       end: json['end'] ?? '',
+      timestamp: json['event_time'] ?? '',
+      bmiClass: json['bmi_class'] ?? '',
     );
   }
 }

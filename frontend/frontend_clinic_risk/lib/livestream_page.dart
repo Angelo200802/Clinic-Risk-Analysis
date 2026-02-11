@@ -9,6 +9,7 @@ import 'types/trend.dart';
 import 'types/sensorUpdate.dart';
 import 'widget/trend_graph.dart';
 import 'widget/chip.dart';
+import 'widget/iconbuttonrow.dart';
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -50,31 +51,43 @@ class _LivestreamPageState extends State<LivestreamPage> {
       }
 
       // Fondamentale: ascoltiamo lo stream qui per gestire la disconnessione
-      _channel.stream.listen((message) {
-        try {
-          final data = jsonDecode(message);
-          if (data['type'] == 'prediction') {
-            SensorUpdate sensorUpdate = SensorUpdate.fromJson(data['data']);
-            setState(() {
-              allPatients[sensorUpdate.patientId] = sensorUpdate;
-              _lastUpdate = sensorUpdate;
-            });
-          } else if (data['type'] == 'trend') {
-            Trend trend = Trend.fromJson(data['data']);
-            setState(() {
-              allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
-              allTrends[trend.patientId]!.add(trend);
-              DateTime actualTime = DateTime.parse(trend.start);
-              allTrends[trend.patientId]?.removeWhere((t) {
-                DateTime startTime = DateTime.parse(t.start);
-                return actualTime.difference(startTime).inMinutes > 5;
+      _channel.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            if (data['type'] == 'prediction') {
+              debugPrint("Ricevuto update: ${data['type']}");
+              SensorUpdate sensorUpdate = SensorUpdate.fromJson(data['data']);
+              setState(() {
+                allPatients[sensorUpdate.patientId] = sensorUpdate;
+                _lastUpdate = sensorUpdate;
               });
-            });
+            } else if (data['type'] == 'trend') {
+              debugPrint("Ricevuto update: ${data['type']}");
+              Trend trend = Trend.fromJson(data['data']);
+              setState(() {
+                allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
+                allTrends[trend.patientId]!.add(trend);
+                DateTime actualTime = DateTime.parse(trend.start);
+                allTrends[trend.patientId]?.removeWhere((t) {
+                  DateTime startTime = DateTime.parse(t.start);
+                  return actualTime.difference(startTime).inMinutes > 5;
+                });
+              });
+            }
+          } catch (e) {
+            debugPrint("Parsing error: $e");
           }
-        } catch (e) {
-          debugPrint("Parsing error: $e");
-        }
-      });
+        },
+        onDone: () {
+          debugPrint("WebSocket chiuso dal server");
+          _handleRetry();
+        },
+        onError: (error) {
+          debugPrint("Errore WebSocket: $error");
+          _handleRetry();
+        },
+      );
     } catch (e) {
       debugPrint("Errore di connessione: $e");
       _handleRetry();
@@ -228,7 +241,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
                     Text(
                       "LIVE TREND ANALYSIS",
                       style: TextStyle(
-                        color: Colors.blueAccent.withOpacity(0.8),
+                        color: chartAttributes
+                            .firstWhere(
+                              (attr) => attr['label'] == label,
+                            )['color']
+                            .withOpacity(0.8),
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.5,
@@ -245,17 +262,35 @@ class _LivestreamPageState extends State<LivestreamPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (selectedPatient != null) _buildHeaderChips(),
+                    //if (selectedPatient != null) _buildHeaderChips(),
                   ],
                 ),
                 if (selectedPatient != null)
-                  _buildLiveBadge(selectedPatient.heartRate),
+                  _buildLiveBadge((() {
+                    switch (label) {
+                      case "Heart Rate":
+                        return selectedPatient.heartRate;
+                      case "SpO2":
+                        return selectedPatient.oxygenSaturation;
+                      case "Temperature":
+                        return selectedPatient.bodyTemperature;
+                      default:
+                        return selectedPatient.respiratoryRate;
+                    }
+                  }())),
               ],
             ),
           ),
-
+          if (selectedPatient != null)
+            IconButtonRow(
+              onPressed: (label) {
+                setState(() {
+                  this.label = label;
+                });
+              },
+              isSelected: (label) => this.label == label,
+            ),
           const Divider(height: 1, color: Colors.white10),
-
           // 2. AREA DEL GRAFICO
           Expanded(
             child: Padding(
@@ -263,7 +298,9 @@ class _LivestreamPageState extends State<LivestreamPage> {
               child: selectedPatient != null
                   ? PatientTrendChart(
                       history: allTrends[selectedPatientId] ?? [],
-                      lineColor: Colors.blueAccent,
+                      lineColor: chartAttributes
+                          .firstWhere((attr) => attr['label'] == label)['color']
+                          .withOpacity(0.8),
                       label: label,
                     )
                   : _buildEmptyChartPlaceholder(),
@@ -275,22 +312,25 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   // Widget per il piccolo badge pulsante con il valore attuale
-  Widget _buildLiveBadge(int value) {
+  Widget _buildLiveBadge(num value) {
+    Color col = chartAttributes
+        .firstWhere((attr) => attr['label'] == label)['color']
+        .withOpacity(0.8);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blueAccent.withOpacity(0.1),
+        color: col.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
+        border: Border.all(color: col),
       ),
       child: Row(
         children: [
-          const Icon(Icons.sensors, color: Colors.blueAccent, size: 16),
+          Icon(Icons.sensors, color: col, size: 16),
           const SizedBox(width: 8),
           Text(
-            "$value $label",
-            style: const TextStyle(
-              color: Colors.blueAccent,
+            "${value.toStringAsFixed(2)} $label",
+            style: TextStyle(
+              color: col,
               fontWeight: FontWeight.bold,
               fontFamily: 'monospace',
             ),

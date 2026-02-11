@@ -4,7 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from threading import Thread
 from datetime import datetime
-import time, os, dotenv, json, asyncio, logging
+import time, os, dotenv, json, asyncio, logging, random
 
 logging.basicConfig(level=logging.INFO)
 
@@ -65,6 +65,7 @@ def ask_llm(raw) -> dict:
     logging.info(f"--- BATCH GENERATED ---")
     logging.info(f"Out: \n{response}")
     response['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+    response['Heart Rate'] = response['Heart Rate'] + random.randint(-2, 2) if 'Heart Rate' in response else None
     return response
 
 async def generate_streaming_data():
@@ -72,7 +73,10 @@ async def generate_streaming_data():
 
     while True:
         next = ask_llm(next)
-        post_data(next)
+        try:
+            post_data(next)
+        except Exception as e:
+            logging.error(f"Failed to post data: {e}")
         time.sleep(10)
     
 if __name__ == "__main__":

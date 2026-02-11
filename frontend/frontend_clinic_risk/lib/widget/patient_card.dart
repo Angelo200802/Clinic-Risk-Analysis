@@ -79,7 +79,10 @@ class _PatientMiniCardState extends State<PatientMiniCard>
               children: [
                 _buildStatRow("Heart Rate", "${patient.heartRate} BPM"),
                 _buildStatRow("Respiratory Rate", "${patient.respiratoryRate}"),
-                _buildStatRow("SpO2", "${patient.oxygenSaturation}%"),
+                _buildStatRow(
+                  "SpO2",
+                  "${patient.oxygenSaturation.toStringAsFixed(2)}%",
+                ),
                 _buildStatRow(
                   "Systolic Blood Pressure",
                   "${patient.systolicBloodPressure} mmHg",
@@ -92,13 +95,25 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                 _buildStatRow("Gender", patient.gender),
                 _buildStatRow(
                   "Body Temperature",
-                  "${patient.bodyTemperature} °C",
+                  "${patient.bodyTemperature.toStringAsFixed(2)} °C",
                 ),
-                _buildStatRow("Height", "${patient.height} m"),
-                _buildStatRow("Weight", "${patient.weight} kg"),
+                _buildStatRow(
+                  "Height",
+                  "${patient.height.toStringAsFixed(2)} m",
+                ),
+                _buildStatRow(
+                  "Weight",
+                  "${patient.weight.toStringAsFixed(2)} kg",
+                ),
                 _buildStatRow("BMI", "${patient.derivedBmi}"),
-                _buildStatRow("MAP", "${patient.derivedMap} mmHg"),
-                _buildStatRow("HRV", "${patient.derivedHrv} ms"),
+                _buildStatRow(
+                  "MAP",
+                  "${patient.derivedMap.toStringAsFixed(2)} mmHg",
+                ),
+                _buildStatRow(
+                  "HRV",
+                  "${patient.derivedHrv.toStringAsFixed(2)} ms",
+                ),
                 _buildStatRow(
                   "Pulse Pressure",
                   "${patient.derivedPulsePressure} mmHg",
@@ -144,7 +159,6 @@ class _PatientMiniCardState extends State<PatientMiniCard>
 
   @override
   Widget build(BuildContext context) {
-    // Logica di stato (personalizzala in base ai tuoi threshold)
     final bool isCritical =
         widget.patient.prediction.toLowerCase() == "high risk";
     final Color statusColor = isCritical
@@ -172,7 +186,6 @@ class _PatientMiniCardState extends State<PatientMiniCard>
               ],
             ),
             borderRadius: BorderRadius.circular(16),
-            // Bordo neon se selezionata
             border: Border.all(
               color: widget.isSelected
                   ? Colors.blueAccent.withOpacity(0.8)
@@ -197,8 +210,9 @@ class _PatientMiniCardState extends State<PatientMiniCard>
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: Stack(
+              // <--- Lo Stack comanda il posizionamento dei figli diretti
               children: [
-                // Indicatore di stato verticale (Barra laterale)
+                // 1. Indicatore laterale
                 Positioned(
                   left: 0,
                   top: 0,
@@ -212,12 +226,12 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                     ),
                   ),
                 ),
-                // Contenuto Card
+
+                // 2. Contenuto Principale (ID e BPM)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
                   child: Row(
                     children: [
-                      // Info Paziente
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,33 +252,14 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                                 color: Colors.white,
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                fontFamily:
-                                    'monospace', // Garantisce stabilità visiva
+                                fontFamily: 'monospace',
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Positioned(
-                        bottom: 4,
-                        right: 4,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: IconButton(
-                            icon: Icon(
-                              Icons.visibility_outlined,
-                              size: 18,
-                              color: Colors.white.withOpacity(0.4),
-                            ),
-                            hoverColor: Colors.blueAccent.withOpacity(0.1),
-                            splashRadius: 20,
-                            onPressed: () {
-                              // Qui chiamiamo la funzione per vedere le statistiche complete
-                              _showFullStats(context, widget.patient);
-                            },
-                          ),
-                        ),
-                      ),
+                      // Aggiungiamo un po' di spazio per non far finire i BPM sotto l'occhio
+                      const SizedBox(width: 35),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -299,6 +294,26 @@ class _PatientMiniCardState extends State<PatientMiniCard>
                         ],
                       ),
                     ],
+                  ),
+                ),
+
+                // 3. BOTTONE OCCHIO (Spostato qui come figlio diretto dello Stack)
+                Positioned(
+                  bottom: 2,
+                  right:
+                      42, // Regola questo valore per centrarlo tra ID e BPM o metterlo dove preferisci
+                  child: Material(
+                    color: Colors.transparent,
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.visibility_outlined,
+                        size: 18,
+                        color: Colors.white.withOpacity(0.4),
+                      ),
+                      hoverColor: Colors.blueAccent.withOpacity(0.1),
+                      splashRadius: 20,
+                      onPressed: () => _showFullStats(context, widget.patient),
+                    ),
                   ),
                 ),
               ],

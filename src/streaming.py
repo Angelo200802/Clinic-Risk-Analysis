@@ -106,6 +106,22 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             .withColumn("spo2_delta", F.col("avg_spo2") - F.col("prev_avg_spo2"))
             .withColumn("hrv_delta", F.col("avg_hrv") - F.col("prev_avg_hrv"))
             .withColumn(
+                "bmi_class",
+                F.when(F.col("Derived_BMI") < 18.5, "UNDERWEIGHT")
+                .when(F.col("Derived_BMI") < 25, "NORMAL")
+                .when(F.col("Derived_BMI") < 30, "OVERWEIGHT")
+                .otherwise("OBESE")
+            )
+            .withColumn(
+                "hr_pct_delta",
+                F.when(
+                    (F.col("prev_avg_hr").isNull()) | (F.col("prev_avg_hr") == 0),
+                    None
+                ).otherwise(
+                    (F.col("avg_hr") - F.col("prev_avg_hr")) / F.col("prev_avg_hr") * 100
+                )
+            )
+            .withColumn(
                 "shock_risk",
                 F.when(
                     (F.col("hr_delta") > 5) &
@@ -151,6 +167,7 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             dict_row['start'] = dict_row['window'].start.isoformat()
             dict_row['end'] = dict_row['window'].end.isoformat()    
             dict_row.pop('window')
+            dict_row['event_time'] = dict_row.pop('event_time').isoformat() if dict_row['event_time'] else ""
             bus.main_loop.call_soon_threadsafe(
                 bus.data_queue.put_nowait, 
                 {
@@ -210,6 +227,8 @@ def start_streaming():
             col("Patient ID")
         )
         .agg(
+            F.last("Derived_BMI").alias("Derived_BMI"), 
+            F.last("Timestamp").alias("event_time"),
             F.avg("Heart Rate").alias("avg_hr"),
             F.max("Heart Rate").alias("max_hr"),
             F.min("Heart Rate").alias("min_hr"),

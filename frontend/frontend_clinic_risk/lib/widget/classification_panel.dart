@@ -22,9 +22,9 @@ class _LiveClassificationPaneState extends State<LiveClassificationPane> {
   Color _getRiskColor() {
     switch (widget.sensorUpdate.prediction.toLowerCase()) {
       case 'low risk':
-        return const Color.fromARGB(255, 36, 236, 42);
+        return Colors.greenAccent;
       case 'high risk':
-        return const Color.fromARGB(255, 169, 17, 6);
+        return Colors.redAccent;
       default:
         return Colors.grey;
     }
