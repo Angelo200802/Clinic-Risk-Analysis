@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Chip;
+import 'package:frontend_clinic_risk/widget/feature.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'widget/classification_panel.dart';
@@ -355,7 +356,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
             ),
             Text(
               value.toStringAsFixed(0),
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
@@ -382,19 +387,34 @@ class _LivestreamPageState extends State<LivestreamPage> {
                   Expanded(child: _buildStreamPanel()),
                   // 2° Quadrante: Placeholder (non ancora definito)
                   Expanded(
-                    child: Container(
-                      margin: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          "Analisi Predittiva (Prossimamente)",
-                          style: TextStyle(color: Colors.white24),
+                    child: Column(
+                      children: [
+                        _buildStatCard(
+                          "SpO₂",
+                          allPatients[selectedPatientId]?.oxygenSaturation ?? 0,
+                          "%",
+                          chartAttributes[1]['color'],
                         ),
-                      ),
+                        FeaturePanel(
+                          insights:
+                              (selectedPatientId != null &&
+                                  allTrends[selectedPatientId]?.isNotEmpty ==
+                                      true)
+                              ? [
+                                  FeatureInsight(
+                                    name: "Heart Rate Δ%",
+                                    deltaPercentage:
+                                        allTrends[selectedPatientId]!
+                                            .last
+                                            .hrPct,
+                                    value: allTrends[selectedPatientId]!
+                                        .last
+                                        .hrPct,
+                                  ),
+                                ]
+                              : [],
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -407,11 +427,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
               child: Row(
                 children: [
                   // 3° Quadrante: Pannello con il grafico
-                  Expanded(
-                    child:
-                        _buildChart(), // <--- Sostituisci il vecchio Container qui
-                  ),
-                  // 4° Quadrante: Triage Master View (le due liste)
+                  Expanded(child: _buildChart()),
                   Expanded(
                     child: TriageMasterView(
                       allPatients: allPatients,

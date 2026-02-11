@@ -19,6 +19,7 @@ class Trend {
   final double maxHrv;
   final double minHrv;
   final double stdHr;
+  final double hrPct;
   final int nSamples;
   final double hrDelta;
   final double mapDelta;
@@ -71,6 +72,7 @@ class Trend {
     required this.timestamp,
     required this.bmiClass,
     required this.riskRatio,
+    required this.hrPct,
   });
 
   double fromLabel(String label) {
@@ -112,6 +114,7 @@ class Trend {
       stdHr: (json['std_hr'] as num? ?? 0.0).toDouble(),
       nSamples: json['n_samples'] ?? 0,
       hrDelta: (json['hr_delta'] as num? ?? 0.0).toDouble(),
+      hrPct: (json['hr_pct_delta'] as num? ?? 0.0).toDouble(),
       mapDelta: (json['map_delta'] as num? ?? 0.0).toDouble(),
       spo2Delta: (json['spo2_delta'] as num? ?? 0.0).toDouble(),
       hrvDelta: (json['hrv_delta'] as num? ?? 0.0).toDouble(),
