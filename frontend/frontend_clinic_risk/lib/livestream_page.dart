@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Chip;
+import 'package:frontend_clinic_risk/types/indexclass.dart';
 import 'package:frontend_clinic_risk/widget/feature.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
@@ -8,8 +9,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widget/patient_card.dart';
 import 'types/trend.dart';
 import 'types/sensorUpdate.dart';
+import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
-import 'widget/chip.dart';
 import 'widget/iconbuttonrow.dart';
 
 class LivestreamPage extends StatefulWidget {
@@ -19,12 +20,24 @@ class LivestreamPage extends StatefulWidget {
   State<LivestreamPage> createState() => _LivestreamPageState();
 }
 
+class Record {
+  SensorUpdate sensorUpdate;
+  Index index;
+  Pattern pattern;
+
+  Record({
+    required this.sensorUpdate,
+    required this.index,
+    required this.pattern,
+  });
+}
+
 class _LivestreamPageState extends State<LivestreamPage> {
   late WebSocketChannel _channel;
   Timer? _reconnectTimer;
   bool _isConnected = false;
   bool _isConnecting = false;
-  Map<int, SensorUpdate> allPatients = {};
+  Map<int, Record> allPatients = {};
   Map<int, List<Trend>> allTrends = {};
   SensorUpdate? _lastUpdate;
   int? selectedPatientId;
@@ -59,8 +72,14 @@ class _LivestreamPageState extends State<LivestreamPage> {
             SensorUpdate sensorUpdate = SensorUpdate.fromJson(
               data['sensor_update'],
             );
+            Index index = Index.fromJson(data['index_update']);
+            Pattern pattern = Pattern.fromJson(data['pattern_update']);
             setState(() {
-              allPatients[sensorUpdate.patientId] = sensorUpdate;
+              allPatients[sensorUpdate.patientId] = Record(
+                sensorUpdate: sensorUpdate,
+                index: index,
+                pattern: pattern,
+              );
               _lastUpdate = sensorUpdate;
             });
             Trend trend = Trend.fromJson(data['trend_update']);
@@ -177,7 +196,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   Widget _buildChart() {
-    final selectedPatient = allPatients[selectedPatientId];
+    final selectedPatient = allPatients[selectedPatientId]?.sensorUpdate;
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -359,7 +378,10 @@ class _LivestreamPageState extends State<LivestreamPage> {
                       children: [
                         _buildStatCard(
                           "SpO₂",
-                          allPatients[selectedPatientId]?.oxygenSaturation ?? 0,
+                          allPatients[selectedPatientId]
+                                  ?.sensorUpdate
+                                  .oxygenSaturation ??
+                              0,
                           "%",
                           chartAttributes[1]['color'],
                         ),
@@ -398,7 +420,9 @@ class _LivestreamPageState extends State<LivestreamPage> {
                   Expanded(child: _buildChart()),
                   Expanded(
                     child: TriageMasterView(
-                      allPatients: allPatients,
+                      allPatients: allPatients.map(
+                        (key, value) => MapEntry(key, value.sensorUpdate),
+                      ),
                       selectedPatientId: selectedPatientId,
                       onPatientSelected: (p) {
                         setState(() {
