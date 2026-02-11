@@ -176,38 +176,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
-  Widget _buildHeaderChips() {
-    return Wrap(
-      spacing: 6.0, // Distanza tra i chip
-      children: [
-        Chip(
-          "Shock Risk ⚠️",
-          isActive:
-              allTrends[selectedPatientId]?.isNotEmpty == true &&
-              allTrends[selectedPatientId]!.last.shockRisk,
-        ),
-        Chip(
-          "Resp Failure ⚠️",
-          isActive:
-              allTrends[selectedPatientId]?.isNotEmpty == true &&
-              allTrends[selectedPatientId]!.last.respFailureRisk,
-        ),
-        Chip(
-          "Sepsis Risk ⚠️",
-          isActive:
-              allTrends[selectedPatientId]?.isNotEmpty == true &&
-              allTrends[selectedPatientId]!.last.sepsisRisk,
-        ),
-        Chip(
-          "Hemo Instability ⚠️",
-          isAlert:
-              allTrends[selectedPatientId]?.isNotEmpty == true &&
-              allTrends[selectedPatientId]!.last.hemoInstability,
-        ),
-      ],
-    );
-  }
-
   Widget _buildChart() {
     final selectedPatient = allPatients[selectedPatientId];
 
