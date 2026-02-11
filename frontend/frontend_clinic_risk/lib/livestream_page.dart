@@ -55,26 +55,23 @@ class _LivestreamPageState extends State<LivestreamPage> {
         (message) {
           try {
             final data = jsonDecode(message);
-            if (data['type'] == 'prediction') {
-              debugPrint("Ricevuto update: ${data['type']}");
-              SensorUpdate sensorUpdate = SensorUpdate.fromJson(data['data']);
-              setState(() {
-                allPatients[sensorUpdate.patientId] = sensorUpdate;
-                _lastUpdate = sensorUpdate;
+            SensorUpdate sensorUpdate = SensorUpdate.fromJson(
+              data['sensor_update'],
+            );
+            setState(() {
+              allPatients[sensorUpdate.patientId] = sensorUpdate;
+              _lastUpdate = sensorUpdate;
+            });
+            Trend trend = Trend.fromJson(data['trend_update']);
+            setState(() {
+              allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
+              allTrends[trend.patientId]!.add(trend);
+              DateTime actualTime = DateTime.parse(trend.start);
+              allTrends[trend.patientId]?.removeWhere((t) {
+                DateTime startTime = DateTime.parse(t.start);
+                return actualTime.difference(startTime).inMinutes > 5;
               });
-            } else if (data['type'] == 'trend') {
-              debugPrint("Ricevuto update: ${data['type']}");
-              Trend trend = Trend.fromJson(data['data']);
-              setState(() {
-                allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
-                allTrends[trend.patientId]!.add(trend);
-                DateTime actualTime = DateTime.parse(trend.start);
-                allTrends[trend.patientId]?.removeWhere((t) {
-                  DateTime startTime = DateTime.parse(t.start);
-                  return actualTime.difference(startTime).inMinutes > 5;
-                });
-              });
-            }
+            });
           } catch (e) {
             debugPrint("Parsing error: $e");
           }
@@ -210,7 +207,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
-  Widget _buildChartQuadrante() {
+  Widget _buildChart() {
     final selectedPatient = allPatients[selectedPatientId];
 
     return Container(
@@ -340,6 +337,34 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
+  Widget _buildStatCard(String label, double value, String unit, Color color) {
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              width: 60,
+              height: 60,
+              child: CircularProgressIndicator(
+                value: value / 100, // Es: 0.98 per 98%
+                strokeWidth: 6,
+                backgroundColor: Colors.white10,
+                valueColor: AlwaysStoppedAnimation<Color>(color),
+              ),
+            ),
+            Text(
+              value.toStringAsFixed(0),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.white54)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -384,7 +409,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                   // 3° Quadrante: Pannello con il grafico
                   Expanded(
                     child:
-                        _buildChartQuadrante(), // <--- Sostituisci il vecchio Container qui
+                        _buildChart(), // <--- Sostituisci il vecchio Container qui
                   ),
                   // 4° Quadrante: Triage Master View (le due liste)
                   Expanded(

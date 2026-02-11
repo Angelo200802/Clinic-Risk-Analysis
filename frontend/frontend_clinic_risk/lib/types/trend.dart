@@ -30,6 +30,7 @@ class Trend {
   final bool hemoInstability;
   final int clinicalRiskScore;
   final String bmiClass;
+  final double riskRatio;
   final String timestamp;
   final String start;
   final String end;
@@ -69,6 +70,7 @@ class Trend {
     required this.end,
     required this.timestamp,
     required this.bmiClass,
+    required this.riskRatio,
   });
 
   double fromLabel(String label) {
@@ -120,8 +122,9 @@ class Trend {
       clinicalRiskScore: json['clinical_risk_score'] ?? 0,
       start: json['start'] ?? '',
       end: json['end'] ?? '',
-      timestamp: json['event_time'] ?? '',
+      timestamp: json['Timestamp'] ?? '',
       bmiClass: json['bmi_class'] ?? '',
+      riskRatio: (json['risk_ratio'] as num? ?? 0.0).toDouble(),
     );
   }
 }

@@ -41,22 +41,25 @@ class Ensemble:
     def _load(self,path:str) -> PipelineModel:
         return PipelineModel.load(path)
 
-    def classify(self,raw_df: DataFrame) -> DataFrame:
+    def classify(self, raw_df: DataFrame) -> DataFrame:
         ensemble_df = raw_df
-        
         weighted_sum_expression = lit(0)
+
+        original_columns = raw_df.columns
 
         for name, (model, weight) in self.models.items():
             pred_col = f"pred_{name}"
-            predictions = model.transform(raw_df) \
-                               .select("Patient ID", col("prediction").alias(pred_col))
             
-            ensemble_df = ensemble_df.join(predictions, on="Patient ID", how="inner")
+            ensemble_df = model.transform(ensemble_df) \
+                            .withColumnRenamed("prediction", pred_col)
+            
+            current_predictions = [f"pred_{n}" for n in self.models.keys() if f"pred_{n}" in ensemble_df.columns]
+            ensemble_df = ensemble_df.select(*original_columns, *current_predictions)
             
             weighted_sum_expression += (col(pred_col) * weight)
 
+        # Calcolo finale
         ensemble_df = ensemble_df.withColumn("weighted_score", weighted_sum_expression)
-        
         final_df = ensemble_df.withColumn(
             "Prediction",
             when(col("weighted_score") > self.thresholds, "Low Risk").otherwise("High Risk")

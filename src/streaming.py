@@ -21,6 +21,24 @@ ensemble = Ensemble()
 router_streaming = APIRouter()
 
 
+columns = [
+    "Heart Rate",
+    "Respiratory Rate",
+    "Body Temperature",
+    "Oxygen Saturation",
+    "Systolic Blood Pressure",
+    "Diastolic Blood Pressure",
+    "Age",
+    "Gender",
+    "Weight (kg)",
+    "Height (m)",
+    "Derived_HRV",
+    "Derived_Pulse_Pressure",
+    "Derived_BMI",
+    "Derived_MAP",
+    "Prediction"
+]
+
 class VitalSigns(BaseModel):
     patient_id : int = Field(alias="Patient ID")
     heart_rate : int = Field(alias="Heart Rate")
@@ -70,7 +88,7 @@ def batch_job(df_batch : DataFrame, batch_id):
     if current_count > 0:
         logging.info(f"--- START BATCH {batch_id} (Records: {current_count}) ---")
         try:
-            prediction = ensemble.classify(df_batch).collect()
+            prediction = ensemble.classify(df_batch).collect() 
             logging.info(f"Batch {batch_id} completato. Predizioni: {len(prediction)}")
             
             for row in prediction:
@@ -94,7 +112,6 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
     if count > 0:
         patient_window = Window.partitionBy("Patient ID").orderBy("window.start")
 
-        # Calcoliamo il trend come differenza tra la media attuale e quella precedente
         df_with_trend = (
             df_stats
             .withColumn("prev_avg_hr", F.lag("avg_hr").over(patient_window))
@@ -167,15 +184,22 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             dict_row['start'] = dict_row['window'].start.isoformat()
             dict_row['end'] = dict_row['window'].end.isoformat()    
             dict_row.pop('window')
-            dict_row['event_time'] = dict_row.pop('event_time').isoformat() if dict_row['event_time'] else ""
+            dict_row['Timestamp'] = dict_row.pop('Timestamp').isoformat() if dict_row['Timestamp'] else ""
+            update = {
+                    "sensor_update" : {
+                        k : v for k, v in dict_row.items() if k in columns
+                    },
+                    "trend_update" : {
+                        k : v for k, v in dict_row.items() if k not in columns and k not in ["prev_avg_hr","prev_avg_map","prev_avg_spo2","prev_avg_hrv"]
+                    }   
+                }
+            update['sensor_update']['Patient ID'] = dict_row['Patient ID']
+            update['sensor_update']['Timestamp'] = dict_row['Timestamp']
             bus.main_loop.call_soon_threadsafe(
                 bus.data_queue.put_nowait, 
-                {
-                    "type" : "trend",
-                    "data" : dict_row
-                }
+                update
             )
-            logging.info(f"Trend calcolato per Patient ID {row['Patient ID']}\n {row.asDict()}")
+            logging.info(f"Trend calcolato per Patient ID {row['Patient ID']}\n {update}")
 
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
         df_with_trend.select(
@@ -194,41 +218,47 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
         ).show(truncate=False)
 
 def start_streaming():
-    df_stream = (
-        get_session().readStream 
-            .format("redis") 
-            .option("redis.host", os.getenv("REDIS_HOST","redis"))  
-            .option("redis.port", os.getenv("REDIS_PORT", "6379"))    
-            .option("stream.keys", "vital_signs") 
-            .option("stream.read.batch.size", "50") 
-            .option("stream.group.name", f"spark-classification")
-            .schema(schema)
-            .load()
-        )
+
     df_stats_raw = (get_session().readStream 
-        .format("redis") 
-        .option("stream.keys", "vital_signs") 
+        .format("redis")
+        .option("redis.host", os.getenv("REDIS_HOST","redis"))  
+        .option("redis.port", os.getenv("REDIS_PORT", "6379")) 
+        .option("stream.keys", "vital_signs")
+        .option("stream.read.batch.size", "50") 
         .option("stream.group.name", "spark-statistics")  
         .schema(schema)
         .load())
     
     df_stats_raw = df_stats_raw.withColumn("Timestamp", col("Timestamp").cast("timestamp"))
+    df_stats_raw = ensemble.classify(df_stats_raw)
 
-    classification_query = (df_stream.writeStream 
-        .foreachBatch(batch_job) 
-        .option("checkpointLocation", "/tmp/spark_checkpoint") 
-        .start())
-
-
-    df_windowed = (df_stats_raw
+    df_windowed = (
+        df_stats_raw
         .withWatermark("Timestamp", "1 minute")
         .groupBy(
             window(col("Timestamp"), "1 minute", "30 seconds"),
             col("Patient ID")
         )
         .agg(
-            F.last("Derived_BMI").alias("Derived_BMI"), 
-            F.last("Timestamp").alias("event_time"),
+            F.last("Heart Rate").alias("Heart Rate"),
+            F.last("Respiratory Rate").alias("Respiratory Rate"),
+            F.last("Oxygen Saturation").alias("Oxygen Saturation"),
+            F.last("Systolic Blood Pressure").alias("Systolic Blood Pressure"),
+            F.last("Diastolic Blood Pressure").alias("Diastolic Blood Pressure"),
+            F.last("Body Temperature").alias("Body Temperature"),
+            F.last("Age").alias("Age"),
+            F.last("Gender").alias("Gender"),
+            F.last("Weight (kg)").alias("Weight (kg)"),
+            F.last("Height (m)").alias("Height (m)"),
+            F.last("Derived_MAP").alias("Derived_MAP"),
+            F.last("Derived_HRV").alias("Derived_HRV"),
+            F.last("Derived_BMI").alias("Derived_BMI"),
+            F.last("Derived_Pulse_Pressure").alias("Derived_Pulse_Pressure"), 
+            F.last("Timestamp").alias("Timestamp"),
+            F.last("Prediction").alias("Prediction"),
+            F.avg(
+                F.when(F.lower(F.col("Prediction")) == "high risk", 1).otherwise(0)
+            ).alias("risk_ratio"),
             F.avg("Heart Rate").alias("avg_hr"),
             F.max("Heart Rate").alias("max_hr"),
             F.min("Heart Rate").alias("min_hr"),
@@ -250,7 +280,7 @@ def start_streaming():
             F.stddev("Heart Rate").alias("std_hr"),
             F.count("*").alias("n_samples")
         )
-    )
+        )
 
     query_stats = (df_windowed.writeStream
         .foreachBatch(batch_job_stats)
@@ -259,7 +289,7 @@ def start_streaming():
         .start()
     )
 
-    return [ classification_query,query_stats]
+    return [query_stats]#,classification_query]
 
 @router_streaming.get("/getseed")
 def get_seed():
