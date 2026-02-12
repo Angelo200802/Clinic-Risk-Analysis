@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide Chip;
 import 'package:frontend_clinic_risk/types/indexclass.dart';
 import 'package:frontend_clinic_risk/widget/feature.dart';
+import 'package:frontend_clinic_risk/widget/lineargauge.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'widget/classification_panel.dart';
@@ -12,6 +13,42 @@ import 'types/sensorUpdate.dart';
 import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
+import 'widget/circularsummary.dart';
+
+Function(Trend) getFeatureInsights = (Trend trend) => [
+  FeatureInsight(
+    name: "Heart Rate Δ%",
+    deltaPercentage: trend.hrPct,
+    value: trend.hrPct,
+  ),
+  FeatureInsight(
+    name: "Respiratory Rate Δ%",
+    deltaPercentage: trend.rrPct,
+    value: trend.rrPct,
+  ),
+  FeatureInsight(
+    name: "SpO₂ Δ%",
+    deltaPercentage: trend.spo2Pct,
+    value: trend.spo2Pct,
+  ),
+  FeatureInsight(
+    name: "Pulse Pressure Δ%",
+    deltaPercentage: trend.ppPct,
+    value: trend.ppPct,
+  ),
+  FeatureInsight(
+    name: "Mean Arterial Pressure Δ%",
+    deltaPercentage: trend.mapPct,
+    value: trend.mapPct,
+  ),
+];
+
+Function(double) getColor = (value) {
+  if (value < 36.0) return Colors.blueAccent;
+  if (value <= 37.2) return Colors.greenAccent;
+  if (value <= 38.2) return Colors.orangeAccent;
+  return Colors.redAccent;
+};
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -22,7 +59,7 @@ class LivestreamPage extends StatefulWidget {
 
 class Record {
   SensorUpdate sensorUpdate;
-  Index index;
+  CalculatedIndex index;
   Pattern pattern;
 
   Record({
@@ -64,7 +101,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
         });
       }
 
-      // Fondamentale: ascoltiamo lo stream qui per gestire la disconnessione
       _channel.stream.listen(
         (message) {
           try {
@@ -72,8 +108,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
             SensorUpdate sensorUpdate = SensorUpdate.fromJson(
               data['sensor_update'],
             );
-            Index index = Index.fromJson(data['index_update']);
-            Pattern pattern = Pattern.fromJson(data['pattern_update']);
+            CalculatedIndex index = CalculatedIndex.fromJson(data['index']);
+            Pattern pattern = Pattern.fromJson(data['pattern']);
             setState(() {
               allPatients[sensorUpdate.patientId] = Record(
                 sensorUpdate: sensorUpdate,
@@ -82,7 +118,10 @@ class _LivestreamPageState extends State<LivestreamPage> {
               );
               _lastUpdate = sensorUpdate;
             });
+
+            debugPrint("Ricevuto trend per patient ${data['trend_update']}}");
             Trend trend = Trend.fromJson(data['trend_update']);
+
             setState(() {
               allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
               allTrends[trend.patientId]!.add(trend);
@@ -325,38 +364,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
-  Widget _buildStatCard(String label, double value, String unit, Color color) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(
-                value: value / 100, // Es: 0.98 per 98%
-                strokeWidth: 6,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-            ),
-            Text(
-              value.toStringAsFixed(0),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 8),
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.white54)),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -365,43 +372,105 @@ class _LivestreamPageState extends State<LivestreamPage> {
         child: Column(
           // Organizziamo lo schermo in due grandi righe (Top e Bottom)
           children: [
-            // RIGA SUPERIORE (Quadranti 1 e 2)
             Expanded(
               flex: 1, // Metà dell'altezza totale
               child: Row(
                 children: [
-                  // 1° Quadrante: Stream Panel
-                  Expanded(child: _buildStreamPanel()),
-                  // 2° Quadrante: Placeholder (non ancora definito)
+                  // Spazio tra i due quadranti
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const SizedBox(height: 15),
+                          if (selectedPatientId != null &&
+                              allTrends[selectedPatientId]?.isNotEmpty == true)
+                            IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildGlassPanel(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          const Text(
+                                            "QUICK STATUS",
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                          CircularSummaryPanel(
+                                            trend: allTrends[selectedPatientId]!
+                                                .last,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: _buildGlassPanel(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          const Text(
+                                            "VITAL COLUMNS",
+                                            style: TextStyle(
+                                              color: Colors.white54,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceEvenly,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              LinearGauge(
+                                                value:
+                                                    allTrends[selectedPatientId]!
+                                                        .last
+                                                        .avgTemp,
+                                                getColor: getColor,
+                                              ),
+                                              VerticalBulletChart(
+                                                value:
+                                                    allTrends[selectedPatientId]!
+                                                        .last
+                                                        .avgMap,
+                                                target: 90,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 20),
+                          Expanded(child: _buildStreamPanel()),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 20), // Spazio tra i due quadranti
                   Expanded(
                     child: Column(
                       children: [
-                        _buildStatCard(
-                          "SpO₂",
-                          allPatients[selectedPatientId]
-                                  ?.sensorUpdate
-                                  .oxygenSaturation ??
-                              0,
-                          "%",
-                          chartAttributes[1]['color'],
-                        ),
+                        const SizedBox(height: 15),
                         FeaturePanel(
                           insights:
                               (selectedPatientId != null &&
                                   allTrends[selectedPatientId]?.isNotEmpty ==
                                       true)
-                              ? [
-                                  FeatureInsight(
-                                    name: "Heart Rate Δ%",
-                                    deltaPercentage:
-                                        allTrends[selectedPatientId]!
-                                            .last
-                                            .hrPct,
-                                    value: allTrends[selectedPatientId]!
-                                        .last
-                                        .hrPct,
-                                  ),
-                                ]
+                              ? getFeatureInsights(
+                                  allTrends[selectedPatientId]!.last,
+                                )
                               : [],
                         ),
                       ],
@@ -439,4 +508,23 @@ class _LivestreamPageState extends State<LivestreamPage> {
       ),
     );
   }
+}
+
+Widget _buildGlassPanel({required Widget child}) {
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1A1A1A).withOpacity(0.4),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.white10),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.2),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: child,
+  );
 }

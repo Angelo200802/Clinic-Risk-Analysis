@@ -8,6 +8,10 @@ class Trend {
   final double avgHrv;
   final double stdHr;
   final double hrPct;
+  final double rrPct;
+  final double spo2Pct;
+  final double ppPct;
+  final double mapPct;
   final int nSamples;
   final String bmiClass;
   final double riskRatio;
@@ -31,6 +35,10 @@ class Trend {
     required this.bmiClass,
     required this.riskRatio,
     required this.hrPct,
+    required this.rrPct,
+    required this.spo2Pct,
+    required this.ppPct,
+    required this.mapPct,
   });
 
   double fromLabel(String label) {
@@ -59,7 +67,11 @@ class Trend {
       avgHrv: (json['avg_hrv'] as num? ?? 0.0).toDouble(),
       stdHr: (json['std_hr'] as num? ?? 0.0).toDouble(),
       nSamples: json['n_samples'] ?? 0,
-      hrPct: (json['hr_pct_delta'] as num? ?? 0.0).toDouble(),
+      hrPct: (json['hr_pct'] as num? ?? 0.0).toDouble(),
+      rrPct: (json['rr_pct'] as num? ?? 0.0).toDouble(),
+      spo2Pct: (json['spo2_pct'] as num? ?? 0.0).toDouble(),
+      ppPct: (json['pp_pct'] as num? ?? 0.0).toDouble(),
+      mapPct: (json['map_pct'] as num? ?? 0.0).toDouble(),
       start: json['start'] ?? '',
       end: json['end'] ?? '',
       timestamp: json['Timestamp'] ?? '',

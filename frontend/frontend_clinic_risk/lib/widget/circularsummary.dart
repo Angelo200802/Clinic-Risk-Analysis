@@ -64,23 +64,13 @@ class CircularSummaryPanel extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           CircularSummary(
-            title: "Heart Rate",
-            value: trend.avgHr,
+            title: "SpO₂",
+            value: trend.avgSpo2,
             color: Colors.redAccent,
           ),
           CircularSummary(
-            title: "Respiratory Rate",
-            value: trend.avgRr,
-            color: Colors.blueAccent,
-          ),
-          CircularSummary(
-            title: "SpO2",
-            value: trend.avgSpo2,
-            color: Colors.greenAccent,
-          ),
-          CircularSummary(
-            title: "Temperature",
-            value: trend.avgTemp,
+            title: "Risk Ratio",
+            value: trend.riskRatio * 100,
             color: Colors.orangeAccent,
           ),
         ],

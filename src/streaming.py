@@ -260,6 +260,7 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
                         and 'prev' not in k 
                         and 'index' not in k
                         and 'pattern' not in k
+                        and 'deteriotation' not in k
                         and 'rate_pp' not in k
                         and 'delta' not in k
                     } ,
