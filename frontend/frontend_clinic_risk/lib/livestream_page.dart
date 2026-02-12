@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Chip;
 import 'package:frontend_clinic_risk/types/indexclass.dart';
+import 'package:frontend_clinic_risk/widget/badgeswidget.dart';
 import 'package:frontend_clinic_risk/widget/feature.dart';
 import 'package:frontend_clinic_risk/widget/lineargauge.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -14,6 +15,67 @@ import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
 import 'widget/circularsummary.dart';
+
+const dynamic payload = {
+  'sensor_update': {
+    'Heart Rate': 94,
+    'Respiratory Rate': 13,
+    'Oxygen Saturation': 96.00851486564063,
+    'Systolic Blood Pressure': 133.0,
+    'Diastolic Blood Pressure': 87.0,
+    'Body Temperature': 36.78481837007358,
+    'Age': 48,
+    'Gender': 'Male',
+    'Weight (kg)': 59.554568255345046,
+    'Height (m)': 1.5244914505173788,
+    'Derived_MAP': 102.33333333333333,
+    'Derived_HRV': 0.05515034978780148,
+    'Derived_BMI': 25.625071995826932,
+    'Derived_Pulse_Pressure': 46.0,
+    'Prediction': 'High Risk',
+    'Patient ID': 12655,
+    'Timestamp': '2026-02-11T19:23:58.301511',
+  },
+  'trend_update': {
+    'Patient ID': 12655,
+    'risk_ratio': 1.0,
+    'avg_hr': 94.5,
+    'avg_sbp': 133.0,
+    'avg_dbp': 87.0,
+    'avg_rr': 13.0,
+    'avg_spo2': 96.00851486564063,
+    'avg_temp': 36.78481837007358,
+    'avg_map': 102.33333333333333,
+    'avg_pp': 46.0,
+    'avg_hrv': 0.05515034978780148,
+    'std_hr': 0.7071067811865476,
+    'n_samples': 2,
+    'bmi_class': 'OVERWEIGHT',
+    'hr_pct': 0.0,
+    'rr_pct': 0.0,
+    'spo2_pct': 0.0,
+    'pp_pct': 0.0,
+    'map_pct': 0.0,
+    'progressive_hemo_deterioration': 0,
+    'start': '2026-02-11T19:23:30',
+    'end': '2026-02-11T19:24:30',
+    'Timestamp': '2026-02-11T19:23:58.301511',
+  },
+  'index': {
+    'shock_index': 0.7105263157894737,
+    'modified_shock_index': 0.9234527687296418,
+    'age_index': 34.10526315789474,
+    'diastolic_shock_index': 1.0862068965517242,
+    'rate_pp': 12568.5,
+    'pp_index': 0.48677248677248675,
+    'rox_index': 7.385270374280049,
+  },
+  'pattern': {
+    'progressive_hemo_deterioration': 1,
+    'progressive_resp_failure_pattern': 1,
+    'dynamic_sepsis_pattern': 0,
+  },
+};
 
 Function(Trend) getFeatureInsights = (Trend trend) => [
   FeatureInsight(
@@ -49,6 +111,77 @@ Function(double) getColor = (value) {
   if (value <= 38.2) return Colors.orangeAccent;
   return Colors.redAccent;
 };
+Widget _buildGlassPanel({required Widget child}) {
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: const Color(0xFF1A1A1A).withOpacity(0.4),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.white10),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.2),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}
+
+Widget _buildRiskBadgesPanel(Map<String, dynamic> riskData) {
+  debugPrint(riskData.toString());
+  return _buildGlassPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "RISK INDICATORS",
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: 10,
+                letterSpacing: 1.2,
+              ),
+            ),
+            Icon(Icons.warning_amber_rounded, color: Colors.white24, size: 14),
+          ],
+        ),
+        const Divider(color: Colors.white10, height: 20),
+        const SizedBox(height: 16),
+        Center(
+          child: Column(
+            children: [
+              Badges(
+                label: "HEMO DETERIORATION",
+                icon: Icons.bolt,
+                color: Colors.redAccent,
+                isActive: riskData['hemo_deterioration'] ?? false,
+              ),
+              const SizedBox(height: 12),
+              Badges(
+                label: "RESP. FAILURE",
+                icon: Icons.coronavirus,
+                color: Colors.orangeAccent,
+                isActive: riskData['resp_failure'] ?? false,
+              ),
+              const SizedBox(height: 12),
+              Badges(
+                label: "DYNAMIC SEPSIS",
+                icon: Icons.warning_amber,
+                color: Colors.yellowAccent,
+                isActive: riskData['dynamic_sepsis'] ?? false,
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class LivestreamPage extends StatefulWidget {
   const LivestreamPage({super.key});
@@ -171,6 +304,14 @@ class _LivestreamPageState extends State<LivestreamPage> {
     super.initState();
     debugPrint("Inizializzazione LivestreamPage...");
     _connect();
+    allPatients[payload['sensor_update']['Patient ID']] = Record(
+      sensorUpdate: SensorUpdate.fromJson(payload['sensor_update']),
+      index: CalculatedIndex.fromJson(payload['index']),
+      pattern: Pattern.fromJson(payload['pattern']),
+    );
+    allTrends[payload['trend_update']['Patient ID']] = [
+      Trend.fromJson(payload['trend_update']),
+    ];
   }
 
   @override
@@ -286,7 +427,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    //if (selectedPatient != null) _buildHeaderChips(),
                   ],
                 ),
                 if (selectedPatient != null)
@@ -298,6 +438,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
                         return selectedPatient.oxygenSaturation;
                       case "Temperature":
                         return selectedPatient.bodyTemperature;
+                      case "Derived_MAP":
+                        return selectedPatient.derivedMap;
                       default:
                         return selectedPatient.respiratoryRate;
                     }
@@ -376,85 +518,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
               flex: 1, // Metà dell'altezza totale
               child: Row(
                 children: [
-                  // Spazio tra i due quadranti
                   Expanded(
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(height: 15),
-                          if (selectedPatientId != null &&
-                              allTrends[selectedPatientId]?.isNotEmpty == true)
-                            IntrinsicHeight(
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: _buildGlassPanel(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          const Text(
-                                            "QUICK STATUS",
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                          CircularSummaryPanel(
-                                            trend: allTrends[selectedPatientId]!
-                                                .last,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 15),
-                                  Expanded(
-                                    child: _buildGlassPanel(
-                                      child: Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceEvenly,
-                                        children: [
-                                          const Text(
-                                            "VITAL COLUMNS",
-                                            style: TextStyle(
-                                              color: Colors.white54,
-                                              fontSize: 10,
-                                            ),
-                                          ),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceEvenly,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                            children: [
-                                              LinearGauge(
-                                                value:
-                                                    allTrends[selectedPatientId]!
-                                                        .last
-                                                        .avgTemp,
-                                                getColor: getColor,
-                                              ),
-                                              VerticalBulletChart(
-                                                value:
-                                                    allTrends[selectedPatientId]!
-                                                        .last
-                                                        .avgMap,
-                                                target: 90,
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 20),
-                          Expanded(child: _buildStreamPanel()),
-                        ],
+                        children: [Expanded(child: _buildStreamPanel())],
                       ),
                     ),
                   ),
@@ -463,15 +531,120 @@ class _LivestreamPageState extends State<LivestreamPage> {
                     child: Column(
                       children: [
                         const SizedBox(height: 15),
-                        FeaturePanel(
-                          insights:
-                              (selectedPatientId != null &&
-                                  allTrends[selectedPatientId]?.isNotEmpty ==
-                                      true)
-                              ? getFeatureInsights(
-                                  allTrends[selectedPatientId]!.last,
-                                )
-                              : [],
+                        if (selectedPatientId != null &&
+                            allTrends[selectedPatientId]?.isNotEmpty == true)
+                          IntrinsicHeight(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: _buildGlassPanel(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        const Text(
+                                          "QUICK STATUS",
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                        const Divider(
+                                          color: Colors.white10,
+                                          height: 20,
+                                        ),
+                                        CircularSummaryPanel(
+                                          trend: allTrends[selectedPatientId]!
+                                              .last,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 15),
+                                Expanded(
+                                  child: _buildGlassPanel(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        const Text(
+                                          "VITAL COLUMNS",
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceEvenly,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            LinearGauge(
+                                              value:
+                                                  allTrends[selectedPatientId]!
+                                                      .last
+                                                      .avgTemp,
+                                              getColor: getColor,
+                                            ),
+                                            VerticalBulletChart(
+                                              value:
+                                                  allTrends[selectedPatientId]!
+                                                      .last
+                                                      .avgMap,
+                                              target: 90,
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 15),
+                        IntrinsicHeight(
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: FeaturePanel(
+                                  insights:
+                                      (selectedPatientId != null &&
+                                          allTrends[selectedPatientId]
+                                                  ?.isNotEmpty ==
+                                              true)
+                                      ? getFeatureInsights(
+                                          allTrends[selectedPatientId]!.last,
+                                        )
+                                      : [],
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: _buildRiskBadgesPanel({
+                                  "hemo_deterioration":
+                                      selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .hemoDeterioration,
+                                  "resp_failure": selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .progRespFailure,
+                                  "dynamic_sepsis": selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .dynamicSepsis,
+                                }),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -486,7 +659,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
               child: Row(
                 children: [
                   // 3° Quadrante: Pannello con il grafico
-                  Expanded(child: _buildChart()),
                   Expanded(
                     child: TriageMasterView(
                       allPatients: allPatients.map(
@@ -500,6 +672,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                       },
                     ),
                   ),
+                  Expanded(child: _buildChart()),
                 ],
               ),
             ),
@@ -508,23 +681,4 @@ class _LivestreamPageState extends State<LivestreamPage> {
       ),
     );
   }
-}
-
-Widget _buildGlassPanel({required Widget child}) {
-  return Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: const Color(0xFF1A1A1A).withOpacity(0.4),
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: Colors.white10),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.2),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: child,
-  );
 }

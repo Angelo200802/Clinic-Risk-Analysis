@@ -13,13 +13,13 @@ class LinearGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calcoliamo la percentuale (0.0 a 1.0)
+    // Proporzione del valore tra 34°C e 42°C (0.0 a 1.0)
     double percent = ((value - 34) / (42 - 34)).clamp(0.0, 1.0);
+    const double gaugeHeight = 120.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Valore numerico in alto
         Text(
           "${value.toStringAsFixed(1)}°",
           style: TextStyle(
@@ -29,14 +29,14 @@ class LinearGauge extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // Il Gauge vero e proprio
         SizedBox(
-          width: 24, // Larghezza fissa per la colonnina
-          height: 120, // Altezza fissa per il verticale
+          width:
+              30, // Larghezza leggermente maggiore per ospitare la sbarretta sporgente
+          height: gaugeHeight,
           child: Stack(
-            alignment: Alignment.bottomCenter, // Si riempie dal basso
+            alignment: Alignment.bottomCenter,
             children: [
-              // Sfondo: Barra Grigia o Gradiente
+              // 1. LA COLONNA (Sfondo statico col gradiente)
               Container(
                 width: 6,
                 decoration: BoxDecoration(
@@ -50,25 +50,34 @@ class LinearGauge extends StatelessWidget {
                       Colors.orange,
                       Colors.red,
                     ],
-                    stops: [0.1, 0.4, 0.6, 0.9],
+                    stops: [0.1, 0.4, 0.7, 0.9],
                   ),
                 ),
               ),
-              // Cursore Orizzontale (la "tacchetta")
+
+              // 2. LA SBARRETTA ANIMATA (Il cursore di livello)
               AnimatedAlign(
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeOutCubic,
-                // In verticale, Alignment(0, 1) è in basso, Alignment(0, -1) è in alto
+                duration: const Duration(
+                  milliseconds: 1000,
+                ), // Più lenta per un look "analogico"
+                curve: Curves.easeInOutCubic, // Partenza e arrivo morbidi
+                // Alignment(0, 1) è la base (34°), Alignment(0, -1) è la cima (42°)
                 alignment: Alignment(0, 1 - (percent * 2)),
                 child: Container(
-                  width: 20,
-                  height: 4,
+                  width: 24, // Più larga della colonna per "abbracciarla"
+                  height: 3, // Spessore della sbarretta
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(2),
                     boxShadow: [
                       BoxShadow(
-                        color: _getColor(value).withOpacity(0.8),
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                      // Effetto "Glow" che segue la sbarretta
+                      BoxShadow(
+                        color: _getColor(value).withOpacity(0.5),
                         blurRadius: 8,
                         spreadRadius: 1,
                       ),
@@ -79,10 +88,14 @@ class LinearGauge extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         const Text(
           "TEMP",
-          style: TextStyle(color: Colors.white24, fontSize: 8),
+          style: TextStyle(
+            color: Colors.white24,
+            fontSize: 8,
+            letterSpacing: 1,
+          ),
         ),
       ],
     );

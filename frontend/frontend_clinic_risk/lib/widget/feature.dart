@@ -32,9 +32,17 @@ class FeatureRow extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    isIncreasing ? Icons.arrow_upward : Icons.arrow_downward,
+                    isIncreasing
+                        ? Icons.arrow_upward
+                        : insight.deltaPercentage == 0
+                        ? Icons.remove
+                        : Icons.arrow_downward,
                     size: 14,
-                    color: isIncreasing ? Colors.redAccent : Colors.blueAccent,
+                    color: isIncreasing
+                        ? Colors.redAccent
+                        : insight.deltaPercentage == 0
+                        ? Colors.white70
+                        : Colors.blueAccent,
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -47,7 +55,11 @@ class FeatureRow extends StatelessWidget {
               Text(
                 "${isIncreasing ? '+' : ''}${insight.deltaPercentage.toStringAsFixed(1)}%",
                 style: TextStyle(
-                  color: isIncreasing ? Colors.redAccent : Colors.blueAccent,
+                  color: isIncreasing
+                      ? Colors.redAccent
+                      : insight.deltaPercentage == 0
+                      ? Colors.white70
+                      : Colors.blueAccent,
                   fontWeight: FontWeight.bold,
                   fontSize: 12,
                   fontFamily: 'monospace',
@@ -65,7 +77,11 @@ class FeatureRow extends StatelessWidget {
                 1.0,
               ), // Normalizzato
               backgroundColor: Colors.white10,
-              color: isIncreasing ? Colors.redAccent : Colors.blueAccent,
+              color: isIncreasing
+                  ? Colors.redAccent
+                  : insight.deltaPercentage == 0
+                  ? Colors.white70
+                  : Colors.blueAccent,
               minHeight: 3,
             ),
           ),

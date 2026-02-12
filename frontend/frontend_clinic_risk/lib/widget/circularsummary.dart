@@ -23,25 +23,43 @@ class CircularSummary extends StatelessWidget {
             SizedBox(
               width: 60,
               height: 60,
-              child: CircularProgressIndicator(
-                value: value / 100, // Es: 0.98 per 98%
-                strokeWidth: 6,
-                backgroundColor: Colors.white10,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
+              child: TweenAnimationBuilder<double>(
+                // L'animazione va dal valore precedente al nuovo
+                tween: Tween<double>(begin: 0, end: value / 100),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutCubic, // Animazione fluida e "organica"
+                builder: (context, animatedValue, child) {
+                  return CircularProgressIndicator(
+                    value: animatedValue,
+                    strokeWidth: 6,
+                    backgroundColor: Colors.white10,
+                    valueColor: AlwaysStoppedAnimation<Color>(color),
+                  );
+                },
               ),
             ),
+            // Anche il testo può beneficiare di un leggero effetto ombra per il "glow"
             Text(
               value.toStringAsFixed(0),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
                 color: Colors.white,
+                shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
               ),
             ),
           ],
         ),
-        SizedBox(height: 8),
-        Text(title, style: TextStyle(fontSize: 10, color: Colors.white54)),
+        const SizedBox(height: 8),
+        Text(
+          title.toUpperCase(),
+          style: const TextStyle(
+            fontSize: 9,
+            color: Colors.white54,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ],
     );
   }
@@ -54,27 +72,47 @@ class CircularSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          CircularSummary(
-            title: "SpO₂",
-            value: trend.avgSpo2,
-            color: Colors.redAccent,
-          ),
-          CircularSummary(
-            title: "Risk Ratio",
-            value: trend.riskRatio * 100,
-            color: Colors.orangeAccent,
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        CircularSummary(
+          title: "SpO₂",
+          value: trend.avgSpo2,
+          color: Colors.redAccent,
+        ),
+        CircularSummary(
+          title: "Risk Ratio",
+          value: trend.riskRatio * 100,
+          color: Colors.orangeAccent,
+        ),
+        CircularSummary(
+          title: "HRV",
+          value: trend.avgHrv,
+          color: Colors.blueAccent,
+        ),
+        Column(
+          children: [
+            Text(
+              "BMI CLASS",
+              style: const TextStyle(
+                fontSize: 9,
+                color: Colors.white54,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              trend.bmiClass,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white,
+                letterSpacing: 1.1,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
