@@ -5,6 +5,7 @@ from pyspark.ml.feature import VectorAssembler, StringIndexer, PolynomialExpansi
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.ml.classification import LogisticRegression
 from pyspark.ml import Pipeline, PipelineModel
+from pyspark.sql import functions as F
 from dotenv import load_dotenv
 import os, logging, json
 
@@ -86,7 +87,9 @@ def get_poly_feature_names(base_features, degree=2):
     return poly_names
 
 def evaluate_model(predictions,label,predict_label="Prediction"):
-    evaluator = MulticlassClassificationEvaluator(labelCol=label, predictionCol=predict_label)
+    predictions = predictions.withColumn(f"{predict_label}_binary", F.when(F.col(predict_label) == "High Risk", 1.0).otherwise(0.0))
+    predictions = predictions.withColumn(f"{label}_binary", F.when(F.col(label) == "High Risk", 1.0).otherwise(0.0))
+    evaluator = MulticlassClassificationEvaluator(labelCol=f"{label}_binary", predictionCol=f"{predict_label}_binary")
     accuracy = evaluator.setMetricName("accuracy").evaluate(predictions)
     precision = evaluator.setMetricName("weightedPrecision").evaluate(predictions)
     recall = evaluator.setMetricName("weightedRecall").evaluate(predictions)

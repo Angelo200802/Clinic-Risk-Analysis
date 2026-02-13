@@ -36,19 +36,19 @@ services:
   #  networks:
   #    - app-network
 
-  appstream:
-    build:
-      context: .
-      dockerfile: ./stream/Dockerfile
-    ports:
-      - "8501:8501"
-    depends_on:
-      app:
-        condition: service_healthy
-    volumes:
-      - .:/appstream
-    networks:
-      - app-network
+  #appstream:
+  #  build:
+  #    context: .
+  #    dockerfile: ./stream/Dockerfile
+  #  ports:
+  #    - "8501:8501"
+  #  depends_on:
+  #    app:
+  #      condition: service_healthy
+  #  volumes:
+  #    - .:/appstream
+  #  networks:
+  #    - app-network
 
   redis:
     image: "redis"

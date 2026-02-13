@@ -204,6 +204,7 @@ class Record {
 
 class _LivestreamPageState extends State<LivestreamPage> {
   late WebSocketChannel _channel;
+  StreamSubscription? _subscription;
   Timer? _reconnectTimer;
   bool _isConnected = false;
   bool _isConnecting = false;
@@ -234,7 +235,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
         });
       }
 
-      _channel.stream.listen(
+      _subscription = _channel.stream.listen(
         (message) {
           try {
             final data = jsonDecode(message);
@@ -270,11 +271,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
         },
         onDone: () {
           debugPrint("WebSocket chiuso dal server");
-          _handleRetry();
+          if (mounted) _handleRetry();
         },
         onError: (error) {
           debugPrint("Errore WebSocket: $error");
-          _handleRetry();
+          if (mounted) _handleRetry();
         },
       );
     } catch (e) {
@@ -284,19 +285,19 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   void _handleRetry() {
-    if (mounted) {
-      setState(() {
-        _isConnected = false;
-        _isConnecting = false;
-      });
+    if (!mounted) return;
 
-      // Annulla eventuali timer precedenti e ne avvia uno nuovo
-      _reconnectTimer?.cancel();
-      _reconnectTimer = Timer(const Duration(seconds: 5), () {
-        debugPrint("Tentativo di riconnessione in corso...");
-        _connect();
-      });
-    }
+    setState(() {
+      _isConnected = false;
+      _isConnecting = false;
+    });
+
+    // Annulla eventuali timer precedenti e ne avvia uno nuovo
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 5), () {
+      debugPrint("Tentativo di riconnessione in corso...");
+      if (mounted) _connect();
+    });
   }
 
   @override
@@ -316,7 +317,9 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   @override
   void dispose() {
+    _subscription?.cancel();
     _channel.sink.close();
+    _reconnectTimer?.cancel();
     super.dispose();
   }
 

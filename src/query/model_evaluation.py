@@ -3,7 +3,6 @@ from spark_manager import load_dataset
 from pyspark.sql import DataFrame, functions as F
 import os, logging
 from model.logistic_reg import evaluate_model
-from pyspark.ml.feature import StringIndexer
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
@@ -29,13 +28,13 @@ def get_confusion_matrix():
 
 @router_model_ev.get("/evaluation/metrics")
 def get_metrics():
-    return {
-    "accuracy": 0.9415258474152585,
-    "precision": 0.9415209920472551,
-    "recall": 0.9415258474152585,
-    "f1": 0.9415195301496859,
-    "auc_roc": 0.9415195301496859
-}
+    try: 
+        evaluation = evaluate_model(predictions=ds,label="Risk Category", predict_label="Prediction")
+    except Exception as e:
+        logging.error(f"Error during model evaluation: {e}")
+        raise HTTPException(status_code=500, detail="Error during model evaluation")
+    return evaluation
+
 
 @router_model_ev.get("/evaluation/age_risk")
 def get_age_risk():
