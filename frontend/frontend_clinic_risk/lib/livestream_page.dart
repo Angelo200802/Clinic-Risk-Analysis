@@ -111,7 +111,8 @@ Function(double) getColor = (value) {
   if (value <= 38.2) return Colors.orangeAccent;
   return Colors.redAccent;
 };
-Widget _buildGlassPanel({required Widget child}) {
+
+Widget buildGlassPanel({required Widget child}) {
   return Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
@@ -132,7 +133,7 @@ Widget _buildGlassPanel({required Widget child}) {
 
 Widget _buildRiskBadgesPanel(Map<String, dynamic> riskData) {
   debugPrint(riskData.toString());
-  return _buildGlassPanel(
+  return buildGlassPanel(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -540,7 +541,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: _buildGlassPanel(
+                                  child: buildGlassPanel(
                                     child: Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceEvenly,
@@ -566,7 +567,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                 ),
                                 const SizedBox(width: 15),
                                 Expanded(
-                                  child: _buildGlassPanel(
+                                  child: buildGlassPanel(
                                     child: Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.spaceEvenly,

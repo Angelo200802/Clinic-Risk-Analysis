@@ -5,6 +5,9 @@ import 'package:frontend_clinic_risk/widget/confusionmatrix.dart';
 import 'package:frontend_clinic_risk/widget/metrics.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'livestream_page.dart';
+import 'widget/roccurve.dart';
 
 Function(String, String) fetchGet = (String url, String path) async {
   final endpoint = Uri.parse('$url/$path');
@@ -21,6 +24,23 @@ Function(String, String) fetchGet = (String url, String path) async {
     throw Exception('Error fetching data: $e');
   }
 };
+
+Widget _buildPanelHeader(IconData icon, String title) {
+  return Row(
+    children: [
+      Icon(icon, color: Colors.blueAccent, size: 20),
+      const SizedBox(width: 10),
+      Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ],
+  );
+}
 
 class EvaluationPage extends StatefulWidget {
   const EvaluationPage({super.key});
@@ -62,74 +82,163 @@ class _EvaluationPageState extends State<EvaluationPage> {
             final matrixMap =
                 snapshot.data![0]['confusion_matrix'] as Map<String, dynamic>;
             final rawMetrics = snapshot.data![1];
+            debugPrint(
+              'Raw metrics: $rawMetrics',
+            ); // Debug per vedere i dati ricevuti
             final metrics = Metrics.fromJson(rawMetrics);
-
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 40.0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.analytics_outlined,
-                    color: Colors.blueAccent,
-                    size: 40,
+            List<FlSpot> points = metrics.rocCurve
+                .map((point) => FlSpot(point['fpr']!, point['tpr']!))
+                .toList();
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                double screenWidth = constraints.maxWidth;
+                bool isDesktop = screenWidth >= 1000;
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 40.0,
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "MODEL EVALUATION",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  // Avvolgiamo le metriche in un Flexible o lasciamo che shrinkWrap faccia il suo dovere
-                  MetricsDashboard(metrics: metrics),
-                  const SizedBox(height: 40),
-                  const Divider(color: Colors.white24),
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    "CONFUSION MATRIX",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width:
-                        MediaQuery.of(context).size.width -
-                        48, // Sottraiamo il padding orizzontale (24+24)
-                    child: ConfusionMatrixWidget(data: matrixMap),
-                  ),
-                  /*
-                  // Fix per matrici troppo larghe
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(
-                            minWidth: constraints.maxWidth,
-                          ),
-                          child: ConfusionMatrixWidget(data: matrixMap),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.analytics_outlined,
+                        color: Colors.blueAccent,
+                        size: 40,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "MODEL EVALUATION",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    },
-                  ),*/
-                ],
-              ),
+                      ),
+                      const SizedBox(height: 30),
+                      if (isDesktop)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // COLONNA SINISTRA: Metriche + Matrice
+                            Expanded(
+                              flex:
+                                  1, // Puoi regolare il flex per cambiare le proporzioni
+                              child: Column(
+                                children: [
+                                  // PANNELLO 1: METRICHE
+                                  buildGlassPanel(
+                                    child: Column(
+                                      children: [
+                                        _buildPanelHeader(
+                                          Icons.speed,
+                                          "Performance",
+                                        ),
+                                        const SizedBox(height: 20),
+                                        MetricsDashboard(metrics: metrics),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  // PANNELLO 2: MATRICE DI CONFUSIONE
+                                  buildGlassPanel(
+                                    child: Column(
+                                      children: [
+                                        _buildPanelHeader(
+                                          Icons.grid_on,
+                                          "Matrice di Confusione",
+                                        ),
+                                        const SizedBox(height: 20),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: ConfusionMatrixWidget(
+                                            data: matrixMap,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(width: 24),
+
+                            // COLONNA DESTRA: GRAFICO ROC
+                            Expanded(
+                              flex: 1,
+                              child: buildGlassPanel(
+                                child: Column(
+                                  children: [
+                                    _buildPanelHeader(
+                                      Icons.show_chart,
+                                      "Curva ROC",
+                                    ),
+                                    const SizedBox(height: 20),
+                                    // Il grafico si adatterà all'altezza disponibile
+                                    RocCurveChart(points: points),
+                                    const SizedBox(height: 20),
+                                    const Text(
+                                      "L'area sotto la curva (AUC) indica la capacità discriminante del modello. Un valore vicino a 1.0 è ottimale.",
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        buildGlassPanel(
+                          child: Column(
+                            children: [
+                              _buildPanelHeader(Icons.speed, "Performance"),
+                              const SizedBox(height: 20),
+                              MetricsDashboard(metrics: metrics),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        // Layout Mobile: Pannelli uno sotto l'altro
+                        buildGlassPanel(
+                          child: Column(
+                            children: [
+                              _buildPanelHeader(
+                                Icons.grid_on,
+                                "Matrice di Confusione",
+                              ),
+                              const SizedBox(height: 20),
+                              ConfusionMatrixWidget(data: matrixMap),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        buildGlassPanel(
+                          child: Column(
+                            children: [
+                              _buildPanelHeader(Icons.show_chart, "Curva ROC"),
+                              const SizedBox(height: 20),
+                              RocCurveChart(points: points),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 40),
+                    ],
+                  ),
+                );
+              },
             );
           }
-          return const SizedBox();
+
+          return const Center(child: Text("Nessun dato disponibile"));
         },
       ),
     );

@@ -212,7 +212,7 @@ class _PatientTrendChartState extends State<PatientTrendChart> {
             color: widget.lineColor,
             barWidth: 2,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: false),
+            dotData: const FlDotData(show: true),
             belowBarData: BarAreaData(
               show: true,
               gradient: LinearGradient(

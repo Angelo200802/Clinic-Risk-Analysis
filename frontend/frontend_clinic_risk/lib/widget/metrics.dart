@@ -6,6 +6,7 @@ class Metrics {
   final double recall;
   final double f1Score;
   final double aucRoc;
+  final List<Map<String, double>> rocCurve;
 
   const Metrics({
     required this.accuracy,
@@ -13,6 +14,7 @@ class Metrics {
     required this.recall,
     required this.f1Score,
     required this.aucRoc,
+    required this.rocCurve,
   });
 
   factory Metrics.fromJson(Map<String, dynamic> json) {
@@ -22,6 +24,14 @@ class Metrics {
       recall: (json['recall'] as num).toDouble(),
       f1Score: (json['f1_score'] as num).toDouble(),
       aucRoc: (json['auc_roc'] as num).toDouble(),
+      rocCurve: (json['roc_curve'] as List<dynamic>)
+          .map(
+            (point) => {
+              "fpr": (point['fpr'] as num).toDouble(),
+              "tpr": (point['tpr'] as num).toDouble(),
+            },
+          )
+          .toList(),
     );
   }
 }

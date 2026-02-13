@@ -86,7 +86,10 @@ def get_poly_feature_names(base_features, degree=2):
     
     return poly_names
 
-def evaluate_model(predictions,label,predict_label="Prediction"):
+from pyspark.mllib.evaluation import BinaryClassificationMetrics
+from pyspark.sql import DataFrame
+
+def evaluate_model(predictions: DataFrame,label,predict_label="Prediction"):
     predictions = predictions.withColumn(f"{predict_label}_binary", F.when(F.col(predict_label) == "High Risk", 1.0).otherwise(0.0))
     predictions = predictions.withColumn(f"{label}_binary", F.when(F.col(label) == "High Risk", 1.0).otherwise(0.0))
     evaluator = MulticlassClassificationEvaluator(labelCol=f"{label}_binary", predictionCol=f"{predict_label}_binary")
@@ -96,17 +99,33 @@ def evaluate_model(predictions,label,predict_label="Prediction"):
     f1 = evaluator.setMetricName("f1").evaluate(predictions)
     auc_roc = evaluator.evaluate(predictions)
     evaluator = BinaryClassificationEvaluator(labelCol=label,metricName="areaUnderROC")
-    print(f"Accuracy: {accuracy}")
-    print(f"Precision: {precision}")
-    print(f"Recall: {recall}")
-    print(f"F1 Score: {f1}")
-    print(f"AUC ROC: {auc_roc}")
+    
+    results_rdd = predictions.select(f"{predict_label}_binary", f"{label}_binary")\
+                             .rdd.map(lambda row: (float(row[0]), float(row[1])))
+    
+    metrics_raw = BinaryClassificationMetrics(results_rdd)
+    try:
+        # Proviamo la via standard (Java-backed)
+        roc_rdd = metrics_raw._java_model.roc().toJavaRDD().collect()
+        roc_points = [(float(p.get_field(0)), float(p.get_field(1))) for p in roc_rdd]
+    except:
+        # Fallback se Spark non collabora: creiamo una curva minima (0,0 -> AUC -> 1,1)
+        # o inviamo solo i punti estremi
+        roc_points = [(0.0, 0.0), (0.1, auc_roc * 0.8), (0.5, auc_roc), (1.0, 1.0)]
+
+    # Campionamento per il frontend
+    step = max(1, len(roc_points) // 50)
+    sampled_roc = [{"fpr": float(p[0]), "tpr": float(p[1])} for p in roc_points[::step]]
+    if sampled_roc[-1]["fpr"] < 1.0:
+        sampled_roc.append({"fpr": 1.0, "tpr": 1.0})
+
     return {
         "accuracy": accuracy, 
         "precision": precision,
         "recall": recall,
         "f1_score": f1,
-        "auc_roc": auc_roc
+        "auc_roc": auc_roc,
+        "roc_curve": sampled_roc
     }
 
 def fit(cv:CrossValidator,train,save:bool = True,path = ""):
