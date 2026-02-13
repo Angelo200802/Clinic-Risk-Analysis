@@ -105,7 +105,7 @@ def evaluate_model(predictions,label,predict_label="Prediction"):
         "accuracy": accuracy, 
         "precision": precision,
         "recall": recall,
-        "f1": f1,
+        "f1_score": f1,
         "auc_roc": auc_roc
     }
 

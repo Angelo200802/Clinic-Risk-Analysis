@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:frontend_clinic_risk/widget/confusionmatrix.dart';
+import 'package:frontend_clinic_risk/widget/metrics.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -29,29 +30,24 @@ class EvaluationPage extends StatefulWidget {
 }
 
 class _EvaluationPageState extends State<EvaluationPage> {
-  late Future<dynamic> confusionMatrixData;
-  late Future<dynamic> metricsData;
+  late Future<List<dynamic>> combinedData;
+
   @override
   void initState() {
     super.initState();
     String apiUrl = Uri.parse(dotenv.env["BACKEND_BASE_API"]!).toString();
-    debugPrint('API URL: $apiUrl');
-    confusionMatrixData = fetchGet(apiUrl, 'evaluation/confusion_matrix');
-    confusionMatrixData.then((data) {
-      debugPrint('Fetched data: $data');
-    });
-    metricsData = fetchGet(apiUrl, 'evaluation/metrics');
-    metricsData.then((data) {
-      debugPrint('Fetched metrics data: $data');
-    });
+    combinedData = Future.wait([
+      fetchGet(apiUrl, 'evaluation/confusion_matrix'),
+      fetchGet(apiUrl, 'evaluation/metrics'),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A1A1A), // Mantengo il tuo stile dark
-      body: FutureBuilder<dynamic>(
-        future: confusionMatrixData,
+      body: FutureBuilder<List<dynamic>>(
+        future: combinedData,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -64,12 +60,18 @@ class _EvaluationPageState extends State<EvaluationPage> {
           if (snapshot.hasData) {
             // Accediamo alla mappa interna come restituita dal tuo backend
             final matrixMap =
-                snapshot.data['confusion_matrix'] as Map<String, dynamic>;
+                snapshot.data![0]['confusion_matrix'] as Map<String, dynamic>;
+            final rawMetrics = snapshot.data![1];
+            final metrics = Metrics.fromJson(rawMetrics);
 
-            return Padding(
-              padding: const EdgeInsets.all(24.0),
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 40.0,
+              ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const Icon(
                     Icons.analytics_outlined,
@@ -86,7 +88,43 @@ class _EvaluationPageState extends State<EvaluationPage> {
                     ),
                   ),
                   const SizedBox(height: 30),
-                  ConfusionMatrixWidget(data: matrixMap),
+
+                  // Avvolgiamo le metriche in un Flexible o lasciamo che shrinkWrap faccia il suo dovere
+                  MetricsDashboard(metrics: metrics),
+                  const SizedBox(height: 40),
+                  const Divider(color: Colors.white24),
+                  const SizedBox(height: 20),
+
+                  const Text(
+                    "CONFUSION MATRIX",
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width:
+                        MediaQuery.of(context).size.width -
+                        48, // Sottraiamo il padding orizzontale (24+24)
+                    child: ConfusionMatrixWidget(data: matrixMap),
+                  ),
+                  /*
+                  // Fix per matrici troppo larghe
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: constraints.maxWidth,
+                          ),
+                          child: ConfusionMatrixWidget(data: matrixMap),
+                        ),
+                      );
+                    },
+                  ),*/
                 ],
               ),
             );
