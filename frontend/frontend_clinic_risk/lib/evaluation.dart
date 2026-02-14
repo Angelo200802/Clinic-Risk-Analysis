@@ -42,6 +42,151 @@ Widget _buildPanelHeader(IconData icon, String title) {
   );
 }
 
+Widget _buildStratifiedTable(
+  Map<String, dynamic> allData,
+  String selectedCategory,
+  Function(String) onTapCategory,
+) {
+  // Otteniamo le categorie disponibili (Gender, Age_Range, etc.)
+  List<String> categories = allData.keys.toList();
+
+  // Otteniamo i dati per la categoria selezionata (es. Male/Female)
+  Map<String, dynamic> currentData = allData[selectedCategory];
+
+  return buildGlassPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildPanelHeader(Icons.analytics, "Performance per Categoria"),
+            const SizedBox(height: 20),
+            _buildCategorySelector(categories, selectedCategory, onTapCategory),
+          ],
+        ),
+        const SizedBox(height: 20),
+        SingleChildScrollView(
+          scrollDirection:
+              Axis.horizontal, // Rende la tabella scrollabile su mobile
+          child: DataTable(
+            headingRowColor: WidgetStateProperty.all(
+              Colors.blueAccent.withOpacity(0.1),
+            ),
+            columnSpacing: 25,
+            columns: const [
+              DataColumn(
+                label: Text(
+                  'SOTTOGRUPPO',
+                  style: TextStyle(color: Colors.blueAccent),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'ACCURACY',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              DataColumn(
+                label: Text(
+                  'PRECISION',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              DataColumn(
+                label: Text('RECALL', style: TextStyle(color: Colors.white70)),
+              ),
+              DataColumn(
+                label: Text('ROC AUC', style: TextStyle(color: Colors.white70)),
+              ),
+            ],
+            rows: currentData.entries.map((entry) {
+              final stats = entry.value;
+              return DataRow(
+                cells: [
+                  DataCell(
+                    Text(
+                      entry.key,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      "${(stats['accuracy'] * 100).toStringAsFixed(1)}%",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      "${(stats['precision'] * 100).toStringAsFixed(1)}%",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      "${(stats['recall'] * 100).toStringAsFixed(1)}%",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      stats['auc_roc'].toStringAsFixed(3),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// Widget per i bottoni di selezione
+Widget _buildCategorySelector(
+  List<String> categories,
+  String selectedCategory,
+  Function(String) onTapCategory,
+) {
+  return Wrap(
+    spacing: 8,
+    children: categories.map((cat) {
+      bool isSelected = selectedCategory == cat;
+      return ChoiceChip(
+        label: Text(cat.replaceAll("_", " ")),
+        selected: isSelected,
+        onSelected: (selected) {
+          if (selected) {
+            onTapCategory(cat);
+          }
+        },
+        selectedColor: Colors.blueAccent,
+        backgroundColor: Colors.red,
+        labelStyle: TextStyle(
+          color: isSelected ? Colors.white : Colors.white60,
+        ),
+      );
+    }).toList(),
+  );
+}
+
 class EvaluationPage extends StatefulWidget {
   const EvaluationPage({super.key});
 
@@ -51,6 +196,7 @@ class EvaluationPage extends StatefulWidget {
 
 class _EvaluationPageState extends State<EvaluationPage> {
   late Future<List<dynamic>> combinedData;
+  String selectedCategory = "Gender";
 
   @override
   void initState() {
@@ -59,6 +205,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
     combinedData = Future.wait([
       fetchGet(apiUrl, 'evaluation/confusion_matrix'),
       fetchGet(apiUrl, 'evaluation/metrics'),
+      fetchGet(apiUrl, "evaluation/evaluate_by_category"),
     ]);
   }
 
@@ -82,6 +229,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
             final matrixMap =
                 snapshot.data![0]['confusion_matrix'] as Map<String, dynamic>;
             final rawMetrics = snapshot.data![1];
+            final categoryMetrics = snapshot.data![2] as Map<String, dynamic>;
             debugPrint(
               'Raw metrics: $rawMetrics',
             ); // Debug per vedere i dati ricevuti
@@ -165,6 +313,17 @@ class _EvaluationPageState extends State<EvaluationPage> {
 
                             const SizedBox(width: 24),
 
+                            _buildStratifiedTable(
+                              categoryMetrics,
+                              selectedCategory,
+                              (category) {
+                                setState(() {
+                                  selectedCategory = category;
+                                });
+                              },
+                            ),
+
+                            const SizedBox(width: 24),
                             // COLONNA DESTRA: GRAFICO ROC
                             Expanded(
                               flex: 1,
@@ -227,6 +386,17 @@ class _EvaluationPageState extends State<EvaluationPage> {
                               RocCurveChart(points: points),
                             ],
                           ),
+                        ),
+
+                        const SizedBox(height: 24),
+                        _buildStratifiedTable(
+                          categoryMetrics,
+                          selectedCategory,
+                          (category) {
+                            setState(() {
+                              selectedCategory = category;
+                            });
+                          },
                         ),
                       ],
 

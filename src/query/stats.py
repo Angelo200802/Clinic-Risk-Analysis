@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from query.model_evaluation import add_bmi_category
 from spark_manager import load_dataset
 from pyspark.sql import DataFrame, functions as F
 import os, logging
@@ -9,6 +10,31 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 router_stats = APIRouter()
 ds: DataFrame = load_dataset(os.getenv("DATASET_PATH"))
+
+risk_by_gender = (
+    ds.groupBy("Gender", "Risk Category")
+    .count()
+    .toPandas().to_dict(orient="records")
+)
+
+riks_by_bmi = (
+    add_bmi_category(ds)
+    .groupBy("BMI_Category", "Risk Category")
+    .count()
+    .toPandas().to_dict(orient="records")
+)
+
+risk_by_age = (
+    ds.withColumn(
+        "Decade", 
+        (F.floor(F.col("Age") / 10) * 10)
+    ) 
+    .groupBy("Decade", "Risk Category") 
+    .count() 
+    .orderBy("Decade")
+    .toPandas().to_dict(orient="records")
+) 
+
 
 def get_columns():
     col_dict : dict = {}
@@ -52,22 +78,43 @@ def get_stats(signs:str):
 @router_stats.get("/stats/summary")
 def get_summary_stats():
     comparison_stats = ds\
-        .groupBy("Prediction")\
+        .groupBy("Risk Category")\
         .agg(
             F.avg("Heart Rate").alias("Avg_HR"),
             F.avg("Systolic Blood Pressure").alias("Avg_SBP"),
-            F.avg("Derived_Pulse_Pressure").alias("Avg_DPP")
+            F.avg("Derived_Pulse_Pressure").alias("Avg_DPP"),
+            F.avg("Derived_BMI").alias("Avg_BMI"),
         )
     return comparison_stats.toPandas().to_dict(orient="records")    
 
-@router_stats.get("/stats/anomaly")
-def get_anomaly_stats():
-    outliers_count = ds.select(
-        F.count(F.when(F.col("Body Temperature") > 40, 1)).alias("High_Fever_Cases"),
-        F.count(F.when(F.col("Body Temperature") < 35, 1)).alias("Hypothermia_Cases"),
-        F.count(F.when(F.col("Oxygen Saturation") < 90, 1)).alias("Hypoxia_Cases"),
-        F.count(F.when(F.col("Heart Rate") > 150, 1)).alias("Tachycardia_Cases"),
-        F.count(F.when(F.col("Heart Rate") < 50, 1)).alias("Bradycardia_Cases")
-    )
 
-    return outliers_count.toPandas().to_dict(orient="records")[0]
+@router_stats.get("/stats/age_risk")
+def get_age_risk():
+
+    if risk_by_age is None:
+        logging.error(f"Error processing age risk data")
+        raise HTTPException(status_code=500, detail="Error during data processing")
+    return risk_by_age
+
+@router_stats.get("/stats/gender_risk")
+def get_gender_risk():
+
+    if risk_by_gender is None:
+        logging.error(f"Error processing gender risk data")
+        raise HTTPException(status_code=500, detail="Error during data processing")
+    return risk_by_gender
+
+@router_stats.get("/stats/bmi_risk")
+def get_bmi_risk():
+
+    if riks_by_bmi is None:
+        logging.error(f"Error processing BMI risk data")
+        raise HTTPException(status_code=500, detail="Error during data processing")
+    return riks_by_bmi
+
+@router_stats.get("/stats/risk_composition")
+def get_risk_composition():
+
+    risk_composition = ds.groupBy("Risk Category").count()
+
+    return risk_composition.toPandas().to_dict(orient="records")

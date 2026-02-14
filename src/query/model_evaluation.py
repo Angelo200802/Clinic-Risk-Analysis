@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from spark_manager import load_dataset
+from pyspark.ml.feature import Bucketizer
 from pyspark.sql import DataFrame, functions as F
 import os, logging
 from model.logistic_reg import evaluate_model
@@ -10,6 +11,54 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 router_model_ev = APIRouter()
 ds: DataFrame = load_dataset(os.getenv("DATASET_PATH"))
+
+def evaluate_by_category(df:DataFrame,category_col):
+    categories = [ row[0] for row in df.select(category_col).distinct().collect() ]
+
+    stratified_metrics = {}
+    for category in categories:
+        category_df = df.filter(F.col(category_col) == category)
+        metrics = evaluate_model(predictions=category_df, label="Risk Category", predict_label="Prediction")
+        metrics.pop("roc_curve", None)
+        stratified_metrics[category] = metrics
+
+    return stratified_metrics
+
+def add_age_group(df:DataFrame):
+    splits = [0.0, 18.0, 30.0, 50.0, 70.0, float("inf")]
+    bucketizer = Bucketizer(splits=splits, inputCol="Age", outputCol="age_group_idx")
+    
+    df_with_idx = bucketizer.transform(df)
+    return df_with_idx.withColumn(
+        "Age_Range", 
+        F.when(F.col("age_group_idx") == 0.0, "0-18")
+         .when(F.col("age_group_idx") == 1.0, "18-30")
+         .when(F.col("age_group_idx") == 2.0, "30-50")
+         .when(F.col("age_group_idx") == 3.0, "50-70")
+         .when(F.col("age_group_idx") == 4.0, "70+")
+         .otherwise("Unknown")
+    )
+
+def add_bmi_category(df:DataFrame):
+    splits = [0.0, 18.5, 25.0, 30.0, float("inf")]
+    bucketizer = Bucketizer(splits=splits, inputCol="Derived_BMI", outputCol="bmi_category_idx")    
+    
+    df_with_idx = bucketizer.transform(df)
+    return df_with_idx.withColumn(
+        "BMI_Category", 
+        F.when(F.col("bmi_category_idx") == 0.0, "Underweight")
+         .when(F.col("bmi_category_idx") == 1.0, "Normal weight")
+         .when(F.col("bmi_category_idx") == 2.0, "Overweight")
+         .otherwise("Obese")
+    )
+
+df_evaluated_cat = {
+    "Gender" : evaluate_by_category(ds, category_col="Gender"),
+    "Age_Group" : evaluate_by_category(add_age_group(ds), category_col="Age_Range"),
+    "BMI_Category" : evaluate_by_category(add_bmi_category(ds), category_col="BMI_Category")
+}
+
+evaluation = evaluate_model(predictions=ds,label="Risk Category", predict_label="Prediction")
 
 @router_model_ev.get("/evaluation/confusion_matrix")
 def get_confusion_matrix():
@@ -28,45 +77,14 @@ def get_confusion_matrix():
 
 @router_model_ev.get("/evaluation/metrics")
 def get_metrics():
-    try: 
-        evaluation = evaluate_model(predictions=ds,label="Risk Category", predict_label="Prediction")
-    except Exception as e:
-        logging.error(f"Error during model evaluation: {e}")
+    if not evaluation :
+        logging.error(f"Error during model evaluation")
         raise HTTPException(status_code=500, detail="Error during model evaluation")
     return evaluation
 
-
-@router_model_ev.get("/evaluation/age_risk")
-def get_age_risk():
-
-    age_dist_df = ds.withColumn("Decade", (F.floor(F.col("Age") / 10) * 10)) \
-        .groupBy("Decade", "Risk Category") \
-        .count() \
-        .orderBy("Decade")
-    
-    return age_dist_df.toPandas().to_dict(orient="records") 
-
-@router_model_ev.get("/evaluation/gender_risk")
-def get_gender_risk():
-
-    gender_dist_df = ds.groupBy("Gender", "Risk Category").count()
-    return gender_dist_df.toPandas().to_dict(orient="records")
-
-@router_model_ev.get("/evaluation/bmi_risk")
-def get_bmi_risk():
-
-    bmi_dist_df = ds.withColumn("BMI_Category", 
-        F.when(F.col("Derived_BMI") < 18.5, "Underweight")
-         .when((F.col("Derived_BMI") >= 18.5) & (F.col("Derived_BMI") < 25), "Normal weight")
-         .when((F.col("Derived_BMI") >= 25) & (F.col("Derived_BMI") < 30), "Overweight")
-         .otherwise("Obese")
-    ).groupBy("BMI_Category", "Risk Category").count()
-    
-    return bmi_dist_df.toPandas().to_dict(orient="records")
-
-@router_model_ev.get("/evaluation/risk_composition")
-def get_risk_composition():
-
-    risk_composition = ds.groupBy("Prediction").count()
-
-    return risk_composition.toPandas().to_dict(orient="records")
+@router_model_ev.get("/evaluation/evaluate_by_category")
+def get_evaluation_by_category():
+    if not df_evaluated_cat:
+        logging.error(f"Error during category evaluation")
+        raise HTTPException(status_code=500, detail="Error during category evaluation")
+    return df_evaluated_cat
