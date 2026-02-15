@@ -4,6 +4,7 @@ import 'evaluation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'livestream_page.dart';
 import 'evaluation.dart';
+import 'widget/statvisualizer.dart';
 import 'widget/correlationmatrix.dart';
 
 class AnalyticsPage extends StatefulWidget {
@@ -26,6 +27,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       fetchGet(apiUrl, 'stats/gender_risk'),
       fetchGet(apiUrl, 'stats/bmi_risk'),
       fetchGet(apiUrl, 'stats/correlation_matrix'),
+      fetchGet(apiUrl, 'stats?signs=heart_rate'),
     ]);
   }
 
@@ -54,8 +56,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       .toList();
                 }).toList();
             final labels = snapshot.data![4]['columns'];
-            debugPrint("Correlation Matrix: $correlationMatrix");
-            debugPrint("Labels: $labels");
+            final stats = snapshot.data![5];
+
             return LayoutBuilder(
               builder: (context, constraints) {
                 bool isDesktop = constraints.maxWidth >= 1000;
@@ -66,6 +68,42 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   ), // Un po' di respiro ai bordi
                   child: Column(
                     children: [
+                      const Icon(
+                        Icons.history_edu_outlined,
+                        color: Colors.blueAccent,
+                        size: 40,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "Analytics",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      buildGlassPanel(
+                        child: Column(
+                          children: [
+                            buildPanelHeader(
+                              Icons.fitness_center,
+                              "Statistics",
+                            ),
+                            const SizedBox(height: 20),
+                            StatRangeVisualizer(
+                              title: "Frequenza Cardiaca",
+                              min: stats['min'],
+                              max: stats['max'],
+                              mean: stats['mean'],
+                              stdDev: stats['stddev'],
+                              unit: "BPM",
+                              totalSamples: stats['count'],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
                       if (isDesktop)
                         // --- LAYOUT DESKTOP: Age e Gender affiancati ---
                         Row(

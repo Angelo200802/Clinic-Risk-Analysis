@@ -16,33 +16,6 @@ router_stats = APIRouter()
 ds: DataFrame = load_dataset(os.getenv("DATASET_PATH"))
 _cache = {}
 
-ds_patterns = (
-    ds
-    .withColumn(
-        "HR_band", 
-        F.when(F.col("Heart Rate") < 60, "Low")
-        .when(F.col("Heart Rate") > 80, "High")
-        .otherwise("Normal")
-    )
-    .withColumn(
-        "MAP_band",
-        F.when(F.col("Derived_MAP") < 65, "Low")
-        .when(F.col("Derived_MAP") > 85, "High")
-        .otherwise("Normal")
-    )
-    .withColumn(
-        "SpO2_band",
-        F.when(F.col("Oxygen Saturation") < 90, "Ipoxemia")
-        .when(F.col("Oxygen Saturation") <= 94, "Borderline")
-        .otherwise("Normal")
-    )
-    .groupBy(
-        "HR_band", "MAP_band", "SpO2_band", "Risk Category"
-    )
-    .count()
-    .orderBy(F.desc("count"))
-    .limit(5)
-)
 
 input_col = [col for col in ds.columns 
         if col not in [
@@ -111,10 +84,6 @@ def get_column_stats(df:DataFrame,column_name: str):
         "min": stats["min"],
         "max": stats["max"],
     }
-
-@router_stats.get("/stats/patterns")
-def get_patterns(risk_category: str):
-    return ds_patterns.filter(F.col("Risk Category") == risk_category).toPandas().to_dict(orient="records")
 
 @router_stats.get("/stats")
 def get_stats(signs:str):
