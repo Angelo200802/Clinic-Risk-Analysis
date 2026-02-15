@@ -59,7 +59,18 @@ df_evaluated_cat = {
 }
 
 evaluation = evaluate_model(predictions=ds,label="Risk Category", predict_label="Prediction")
-
+evaluation_by_shock_risk = (
+    evaluate_model(
+        predictions = ds.withColumn(
+            "ShockRisk",
+            F.when(
+                (F.col("Heart Rate") / F.col("Systolic Blood Pressure")) > 0.85, 1.0 
+            ).otherwise(0.0)
+        ),
+        label="Risk Category",
+        predict_label="ShockRisk" 
+    )
+)
 @router_model_ev.get("/evaluation/confusion_matrix")
 def get_confusion_matrix():
     df_eval = ds.withColumn("Result_Type", 
@@ -74,6 +85,13 @@ def get_confusion_matrix():
     return {
         "confusion_matrix": confusion_matrix
     }
+
+@router_model_ev.get("/evaluation/metrics_shock_risk")
+def get_metrics_shock_risk():
+    if not evaluation_by_shock_risk :
+        logging.error(f"Error during shock risk model evaluation")
+        raise HTTPException(status_code=500, detail="Error during shock risk model evaluation")
+    return evaluation_by_shock_risk
 
 @router_model_ev.get("/evaluation/metrics")
 def get_metrics():

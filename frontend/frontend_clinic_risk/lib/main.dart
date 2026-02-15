@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:frontend_clinic_risk/livestream_page.dart';
 import 'widget/sidebar.dart';
-import 'history_page.dart';
+import 'insight_page.dart';
 import 'analytics.dart';
 import 'evaluation.dart';
 
@@ -46,9 +46,9 @@ class _DashboardPageState extends State<DashboardPage> {
       if (selectedIndex == 0) {
         return LivestreamPage();
       } else if (selectedIndex == 1) {
-        return HistoryPage();
-      } else if (selectedIndex == 2) {
         return AnalyticsPage();
+      } else if (selectedIndex == 2) {
+        return InsigthPage();
       } else if (selectedIndex == 3) {
         return EvaluationPage();
       }

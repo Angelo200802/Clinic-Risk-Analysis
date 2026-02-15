@@ -31,14 +31,14 @@ class SidebarComponent extends StatelessWidget {
           ),
           SidebarItem(
             icon: Icons.history_rounded,
-            label: 'Patient History',
+            label: 'Analytics',
             isActive: selectedIndex == 1,
             isCollapsed: isCollapsed,
             onTap: () => onItemSelected(1),
           ),
           SidebarItem(
             icon: Icons.analytics_rounded,
-            label: 'Analytics',
+            label: 'Insights',
             isActive: selectedIndex == 2,
             isCollapsed: isCollapsed,
             onTap: () => onItemSelected(2),

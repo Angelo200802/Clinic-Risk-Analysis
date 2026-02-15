@@ -25,7 +25,7 @@ Function(String, String) fetchGet = (String url, String path) async {
   }
 };
 
-Widget _buildPanelHeader(IconData icon, String title) {
+Widget buildPanelHeader(IconData icon, String title) {
   return Row(
     children: [
       Icon(icon, color: Colors.blueAccent, size: 20),
@@ -60,7 +60,7 @@ Widget _buildStratifiedTable(
         Column(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildPanelHeader(Icons.analytics, "Performance per Categoria"),
+            buildPanelHeader(Icons.analytics, "Performance per Categoria"),
             const SizedBox(height: 20),
             _buildCategorySelector(categories, selectedCategory, onTapCategory),
           ],
@@ -279,7 +279,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                                   buildGlassPanel(
                                     child: Column(
                                       children: [
-                                        _buildPanelHeader(
+                                        buildPanelHeader(
                                           Icons.speed,
                                           "Performance",
                                         ),
@@ -293,7 +293,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                                   buildGlassPanel(
                                     child: Column(
                                       children: [
-                                        _buildPanelHeader(
+                                        buildPanelHeader(
                                           Icons.grid_on,
                                           "Matrice di Confusione",
                                         ),
@@ -330,7 +330,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                               child: buildGlassPanel(
                                 child: Column(
                                   children: [
-                                    _buildPanelHeader(
+                                    buildPanelHeader(
                                       Icons.show_chart,
                                       "Curva ROC",
                                     ),
@@ -357,7 +357,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                         buildGlassPanel(
                           child: Column(
                             children: [
-                              _buildPanelHeader(Icons.speed, "Performance"),
+                              buildPanelHeader(Icons.speed, "Performance"),
                               const SizedBox(height: 20),
                               MetricsDashboard(metrics: metrics),
                             ],
@@ -368,7 +368,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                         buildGlassPanel(
                           child: Column(
                             children: [
-                              _buildPanelHeader(
+                              buildPanelHeader(
                                 Icons.grid_on,
                                 "Matrice di Confusione",
                               ),
@@ -381,7 +381,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                         buildGlassPanel(
                           child: Column(
                             children: [
-                              _buildPanelHeader(Icons.show_chart, "Curva ROC"),
+                              buildPanelHeader(Icons.show_chart, "Curva ROC"),
                               const SizedBox(height: 20),
                               RocCurveChart(points: points),
                             ],

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+class InsigthPage extends StatefulWidget {
+  const InsigthPage({super.key});
 
   @override
-  State<HistoryPage> createState() => _HistoryPageState();
+  State<InsigthPage> createState() => _InsigthPageState();
 }
 
-class _HistoryPageState extends State<HistoryPage> {
+class _InsigthPageState extends State<InsigthPage> {
   final String url = Uri.parse(dotenv.env["BACKEND_BASE_API"]!).toString();
 
   @override

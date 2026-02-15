@@ -2,6 +2,10 @@ from fastapi import APIRouter, HTTPException
 from query.model_evaluation import add_bmi_category
 from spark_manager import load_dataset
 from pyspark.sql import DataFrame, functions as F
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.stat import Correlation
+from model.logistic_reg import indexer_gender, indexer_risk
+from pyspark.ml import Pipeline
 import os, logging
 from dotenv import load_dotenv
 
@@ -10,31 +14,73 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 router_stats = APIRouter()
 ds: DataFrame = load_dataset(os.getenv("DATASET_PATH"))
+_cache = {}
 
-risk_by_gender = (
-    ds.groupBy("Gender", "Risk Category")
+ds_patterns = (
+    ds
+    .withColumn(
+        "HR_band", 
+        F.when(F.col("Heart Rate") < 60, "Low")
+        .when(F.col("Heart Rate") > 80, "High")
+        .otherwise("Normal")
+    )
+    .withColumn(
+        "MAP_band",
+        F.when(F.col("Derived_MAP") < 65, "Low")
+        .when(F.col("Derived_MAP") > 85, "High")
+        .otherwise("Normal")
+    )
+    .withColumn(
+        "SpO2_band",
+        F.when(F.col("Oxygen Saturation") < 90, "Ipoxemia")
+        .when(F.col("Oxygen Saturation") <= 94, "Borderline")
+        .otherwise("Normal")
+    )
+    .groupBy(
+        "HR_band", "MAP_band", "SpO2_band", "Risk Category"
+    )
     .count()
-    .toPandas().to_dict(orient="records")
+    .orderBy(F.desc("count"))
+    .limit(5)
 )
 
-riks_by_bmi = (
-    add_bmi_category(ds)
-    .groupBy("BMI_Category", "Risk Category")
-    .count()
-    .toPandas().to_dict(orient="records")
+input_col = [col for col in ds.columns 
+        if col not in [
+            "pred_logistic_regression", 
+            "pred_mlp", 
+            "pred_naive_bayes", 
+            "weighted_score", 
+            "Prediction",
+            "Gender",
+            "Risk Category",
+            "Timestamp",
+            "Patient ID"
+        ]]
+input_col.append("Gender_b")
+input_col.append("RiskCategory_b")
+
+assembler = VectorAssembler(
+    inputCols= input_col, 
+        outputCol="features"
 )
 
-risk_by_age = (
-    ds.withColumn(
-        "Decade", 
-        (F.floor(F.col("Age") / 10) * 10)
-    ) 
-    .groupBy("Decade", "Risk Category") 
-    .count() 
-    .orderBy("Decade")
-    .toPandas().to_dict(orient="records")
-) 
+pipeline = Pipeline(stages=[indexer_gender, indexer_risk, assembler])
 
+def calculate_correlation_matrix():
+
+    if not 'correlation_matrix' in _cache:
+        _cache['correlation_matrix'] = (
+            Correlation
+            .corr(
+                pipeline
+                .fit(ds)
+                .transform(ds), 
+        "features", method="pearson")
+        .head()[0]
+        .toArray().tolist()
+        )
+
+    return _cache['correlation_matrix']
 
 def get_columns():
     col_dict : dict = {}
@@ -66,6 +112,10 @@ def get_column_stats(df:DataFrame,column_name: str):
         "max": stats["max"],
     }
 
+@router_stats.get("/stats/patterns")
+def get_patterns(risk_category: str):
+    return ds_patterns.filter(F.col("Risk Category") == risk_category).toPandas().to_dict(orient="records")
+
 @router_stats.get("/stats")
 def get_stats(signs:str):
     results = get_column_stats(ds, signs)
@@ -91,26 +141,44 @@ def get_summary_stats():
 @router_stats.get("/stats/age_risk")
 def get_age_risk():
 
-    if risk_by_age is None:
-        logging.error(f"Error processing age risk data")
-        raise HTTPException(status_code=500, detail="Error during data processing")
-    return risk_by_age
+    if not 'risk_by_age' in _cache:
+        _cache['risk_by_age'] = (
+            ds.withColumn(
+                "Decade", 
+                (F.floor(F.col("Age") / 10) * 10)
+            ) 
+            .groupBy("Decade", "Risk Category") 
+            .count() 
+            .orderBy("Decade")
+            .toPandas().to_dict(orient="records")
+        ) 
+
+    return {"data" : _cache['risk_by_age']}
 
 @router_stats.get("/stats/gender_risk")
 def get_gender_risk():
 
-    if risk_by_gender is None:
-        logging.error(f"Error processing gender risk data")
-        raise HTTPException(status_code=500, detail="Error during data processing")
-    return risk_by_gender
+    if not 'risk_by_gender' in _cache:
+        _cache['risk_by_gender'] = (
+            ds.groupBy("Gender", "Risk Category")
+            .count()
+            .toPandas().to_dict(orient="records")
+        )
+    return {"data" : _cache['risk_by_gender']}
 
 @router_stats.get("/stats/bmi_risk")
 def get_bmi_risk():
 
-    if riks_by_bmi is None:
-        logging.error(f"Error processing BMI risk data")
-        raise HTTPException(status_code=500, detail="Error during data processing")
-    return riks_by_bmi
+    if not 'riks_by_bmi' in _cache:
+        _cache['riks_by_bmi'] = (
+            add_bmi_category(ds)
+            .groupBy("BMI_Category", "Risk Category")
+            .count()
+            .toPandas().to_dict(orient="records")
+            
+        )
+
+    return {"data" : _cache['riks_by_bmi']}
 
 @router_stats.get("/stats/risk_composition")
 def get_risk_composition():
@@ -118,3 +186,15 @@ def get_risk_composition():
     risk_composition = ds.groupBy("Risk Category").count()
 
     return risk_composition.toPandas().to_dict(orient="records")
+
+@router_stats.get("/stats/correlation_matrix")
+def get_correlation_matrix():
+
+    corr_matrix = calculate_correlation_matrix()
+    
+    return {
+        "correlation_matrix": corr_matrix,
+        "columns": [
+            col.removeprefix("Derived_").removesuffix("_b").replace("_", " ") for col in input_col
+            ]
+        }
