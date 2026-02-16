@@ -6,6 +6,7 @@ import 'livestream_page.dart';
 import 'evaluation.dart';
 import 'widget/statvisualizer.dart';
 import 'widget/correlationmatrix.dart';
+import 'widget/stressmap.dart';
 
 class AnalyticsPage extends StatefulWidget {
   const AnalyticsPage({super.key});
@@ -14,20 +15,57 @@ class AnalyticsPage extends StatefulWidget {
   State<AnalyticsPage> createState() => _AnalyticsPageState();
 }
 
+Map<String, Map<String, dynamic>> signsMap = {
+  "heart_rate": {"unit": "BPM", "label": "HR", "payload": null},
+  "respiratory_rate": {
+    "unit": "Breaths/min",
+    "label": "Respiratory Rate",
+    "payload": null,
+  },
+  "oxygen_saturation": {"unit": "%", "label": "SpO2", "payload": null},
+  "body_temperature": {
+    "unit": "°C",
+    "label": "Body Temperature",
+    "payload": null,
+  },
+  "derived_pulse_pressure": {"unit": "mmHg", "label": "PP", "payload": null},
+  "derived_hrv": {"unit": "ms", "label": "HRV", "payload": null},
+  "derived_map": {"unit": "mmHg", "label": "MAP", "payload": null},
+};
+
+Widget buildStats(String label, String unit, dynamic data) {
+  return StatRangeVisualizer(
+    title: label,
+    min: data['min'],
+    max: data['max'],
+    mean: data['mean'],
+    stdDev: data['stddev'],
+    unit: unit,
+    totalSamples: data['count'],
+  );
+}
+
 class _AnalyticsPageState extends State<AnalyticsPage> {
   late Future<List<dynamic>> combinedData;
+  String state = "heart_rate";
 
   @override
   void initState() {
     super.initState();
     String apiUrl = Uri.parse(dotenv.env["BACKEND_BASE_API"]!).toString();
     combinedData = Future.wait([
-      fetchGet(apiUrl, 'stats/summary'),
       fetchGet(apiUrl, 'stats/age_risk'),
       fetchGet(apiUrl, 'stats/gender_risk'),
       fetchGet(apiUrl, 'stats/bmi_risk'),
       fetchGet(apiUrl, 'stats/correlation_matrix'),
       fetchGet(apiUrl, 'stats?signs=heart_rate'),
+      fetchGet(apiUrl, 'stats?signs=respiratory_rate'),
+      fetchGet(apiUrl, 'stats?signs=oxygen_saturation'),
+      fetchGet(apiUrl, 'stats?signs=body_temperature'),
+      fetchGet(apiUrl, 'stats?signs=derived_pulse_pressure'),
+      fetchGet(apiUrl, 'stats?signs=derived_hrv'),
+      fetchGet(apiUrl, 'stats?signs=derived_map'),
+      fetchGet(apiUrl, 'stats/demographic_stress_map'),
     ]);
   }
 
@@ -45,18 +83,26 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('No data available'));
           } else {
-            final summary = snapshot.data![0];
-            final riskByAge = snapshot.data![1];
-            final riskByGender = snapshot.data![2];
-            final riskByBmi = snapshot.data![3];
+            final riskByAge = snapshot.data![0];
+            final riskByGender = snapshot.data![1];
+            final riskByBmi = snapshot.data![2];
             final correlationMatrix =
-                (snapshot.data![4]['correlation_matrix'] as List).map((row) {
+                (snapshot.data![3]['correlation_matrix'] as List).map((row) {
                   return (row as List)
                       .map((value) => (value as num).toDouble())
                       .toList();
                 }).toList();
-            final labels = snapshot.data![4]['columns'];
-            final stats = snapshot.data![5];
+            final labels = snapshot.data![3]['columns'];
+            signsMap['heart_rate']!['payload'] = snapshot.data![4]!;
+            signsMap['respiratory_rate']!['payload'] = snapshot.data![5];
+            signsMap['oxygen_saturation']!['payload'] = snapshot.data![6];
+            signsMap['body_temperature']!['payload'] = snapshot.data![7];
+            signsMap['derived_pulse_pressure']!['payload'] = snapshot.data![8];
+            signsMap['derived_hrv']!['payload'] = snapshot.data![9];
+            signsMap['derived_map']!['payload'] = snapshot.data![10];
+
+            final stressMap = snapshot.data![11]['data']
+                .cast<Map<String, dynamic>>();
 
             return LayoutBuilder(
               builder: (context, constraints) {
@@ -86,26 +132,43 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       buildGlassPanel(
                         child: Column(
                           children: [
-                            buildPanelHeader(
-                              Icons.fitness_center,
-                              "Statistics",
+                            Row(
+                              children: [
+                                buildPanelHeader(
+                                  Icons.fitness_center,
+                                  "Statistics",
+                                ),
+                                const SizedBox(width: 16),
+                                buildCategorySelector(
+                                  signsMap.keys
+                                      .toList()
+                                      .map(
+                                        (e) => signsMap[e]!['label']! as String,
+                                      )
+                                      .toList(),
+                                  signsMap[state]!['label']! as String,
+                                  (newState) {
+                                    setState(
+                                      () => state = signsMap.keys.firstWhere(
+                                        (k) =>
+                                            signsMap[k]!['label'] == newState,
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 20),
-                            StatRangeVisualizer(
-                              title: "Frequenza Cardiaca",
-                              min: stats['min'],
-                              max: stats['max'],
-                              mean: stats['mean'],
-                              stdDev: stats['stddev'],
-                              unit: "BPM",
-                              totalSamples: stats['count'],
+                            buildStats(
+                              state.replaceAll(RegExp(r'_'), " "),
+                              signsMap[state]!['unit']!,
+                              signsMap[state]!['payload'],
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 24),
                       if (isDesktop)
-                        // --- LAYOUT DESKTOP: Age e Gender affiancati ---
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -130,9 +193,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                 ),
                               ),
                             ),
-                            const SizedBox(
-                              width: 24,
-                            ), // Spazio tra i due pannelli
+                            const SizedBox(width: 24),
                             Expanded(
                               child: buildGlassPanel(
                                 child: Column(
@@ -218,7 +279,23 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 24),
 
+                      buildGlassPanel(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            buildPanelHeader(
+                              Icons.map,
+                              "Demographic Stress Map",
+                            ),
+                            const SizedBox(height: 20),
+                            DemographicStressMap(data: stressMap),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
                       buildGlassPanel(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,8 +316,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                           ],
                         ),
                       ),
-
-                      // --- BMI: Sempre a tutta larghezza (o puoi affiancarlo ad altro) ---
                     ],
                   ),
                 );

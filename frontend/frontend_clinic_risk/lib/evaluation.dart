@@ -8,6 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'livestream_page.dart';
 import 'widget/roccurve.dart';
+import 'widget/donutchart.dart';
 
 Function(String, String) fetchGet = (String url, String path) async {
   final endpoint = Uri.parse('$url/$path');
@@ -42,125 +43,8 @@ Widget buildPanelHeader(IconData icon, String title) {
   );
 }
 
-Widget _buildStratifiedTable(
-  Map<String, dynamic> allData,
-  String selectedCategory,
-  Function(String) onTapCategory,
-) {
-  // Otteniamo le categorie disponibili (Gender, Age_Range, etc.)
-  List<String> categories = allData.keys.toList();
-
-  // Otteniamo i dati per la categoria selezionata (es. Male/Female)
-  Map<String, dynamic> currentData = allData[selectedCategory];
-
-  return buildGlassPanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            buildPanelHeader(Icons.analytics, "Performance per Categoria"),
-            const SizedBox(height: 20),
-            _buildCategorySelector(categories, selectedCategory, onTapCategory),
-          ],
-        ),
-        const SizedBox(height: 20),
-        SingleChildScrollView(
-          scrollDirection:
-              Axis.horizontal, // Rende la tabella scrollabile su mobile
-          child: DataTable(
-            headingRowColor: WidgetStateProperty.all(
-              Colors.blueAccent.withOpacity(0.1),
-            ),
-            columnSpacing: 25,
-            columns: const [
-              DataColumn(
-                label: Text(
-                  'SOTTOGRUPPO',
-                  style: TextStyle(color: Colors.blueAccent),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'ACCURACY',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'PRECISION',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-              DataColumn(
-                label: Text('RECALL', style: TextStyle(color: Colors.white70)),
-              ),
-              DataColumn(
-                label: Text('ROC AUC', style: TextStyle(color: Colors.white70)),
-              ),
-            ],
-            rows: currentData.entries.map((entry) {
-              final stats = entry.value;
-              return DataRow(
-                cells: [
-                  DataCell(
-                    Text(
-                      entry.key,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    Text(
-                      "${(stats['accuracy'] * 100).toStringAsFixed(1)}%",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    Text(
-                      "${(stats['precision'] * 100).toStringAsFixed(1)}%",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    Text(
-                      "${(stats['recall'] * 100).toStringAsFixed(1)}%",
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                  DataCell(
-                    Text(
-                      stats['auc_roc'].toStringAsFixed(3),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
 // Widget per i bottoni di selezione
-Widget _buildCategorySelector(
+Widget buildCategorySelector(
   List<String> categories,
   String selectedCategory,
   Function(String) onTapCategory,
@@ -206,7 +90,144 @@ class _EvaluationPageState extends State<EvaluationPage> {
       fetchGet(apiUrl, 'evaluation/confusion_matrix'),
       fetchGet(apiUrl, 'evaluation/metrics'),
       fetchGet(apiUrl, "evaluation/evaluate_by_category"),
+      fetchGet(apiUrl, "evaluation/ensemble_consensus"),
+      fetchGet(apiUrl, "evaluation/metrics_shock_risk"),
     ]);
+  }
+
+  Widget _buildStratifiedTable(
+    Map<String, dynamic> allData,
+    String selectedCategory,
+    Function(String) onTapCategory,
+  ) {
+    List<String> categories = allData.keys.toList();
+    Map<String, dynamic> currentData = allData[selectedCategory];
+
+    return buildGlassPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment
+            .stretch, // Forza i figli a occupare tutta la larghezza
+        children: [
+          Row(
+            // Usiamo Row invece di Column per l'header per un look più "Dashboard"
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              buildPanelHeader(Icons.analytics, "Performance per Categoria"),
+              buildCategorySelector(
+                categories,
+                selectedCategory,
+                onTapCategory,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Questo contenitore forza la tabella a espandersi
+          SizedBox(
+            width: double.infinity,
+            child: Theme(
+              // Puliamo lo stile della tabella per integrarla nel pannello
+              data: Theme.of(context).copyWith(dividerColor: Colors.white),
+              child: DataTable(
+                horizontalMargin:
+                    12, // Riduce i margini laterali per dare più spazio alle colonne
+                columnSpacing:
+                    20, // Gestisce lo spazio tra le colonne in modo uniforme
+                headingRowColor: WidgetStateProperty.all(
+                  Colors.blueAccent.withOpacity(0.05),
+                ),
+                // Forza la tabella a occupare tutto lo spazio se i dati sono pochi
+                columns: const [
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'SOTTOGRUPPO',
+                        style: TextStyle(
+                          color: Colors.blueAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'ACCURACY',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'PRECISION',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'RECALL',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
+                        'ROC AUC',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                ],
+                rows: currentData.entries.map((entry) {
+                  final stats = entry.value;
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          entry.key,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          "${(stats['accuracy'] * 100).toStringAsFixed(1)}%",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          "${(stats['precision'] * 100).toStringAsFixed(1)}%",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          "${(stats['recall'] * 100).toStringAsFixed(1)}%",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          stats['auc_roc'].toStringAsFixed(3),
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -230,11 +251,17 @@ class _EvaluationPageState extends State<EvaluationPage> {
                 snapshot.data![0]['confusion_matrix'] as Map<String, dynamic>;
             final rawMetrics = snapshot.data![1];
             final categoryMetrics = snapshot.data![2] as Map<String, dynamic>;
-            debugPrint(
-              'Raw metrics: $rawMetrics',
-            ); // Debug per vedere i dati ricevuti
+            // Debug per vedere i dati ricevuti
             final metrics = Metrics.fromJson(rawMetrics);
             List<FlSpot> points = metrics.rocCurve
+                .map((point) => FlSpot(point['fpr']!, point['tpr']!))
+                .toList();
+            final ensembleConsensus = snapshot.data![3]['data']
+                .cast<
+                  Map<String, dynamic>
+                >(); // Lista di mappe per il grafico a torta
+            final shockRiskMetrics = Metrics.fromJson(snapshot.data![4]);
+            List<FlSpot> shockRiskPoints = shockRiskMetrics.rocCurve
                 .map((point) => FlSpot(point['fpr']!, point['tpr']!))
                 .toList();
             return LayoutBuilder(
@@ -265,95 +292,114 @@ class _EvaluationPageState extends State<EvaluationPage> {
                         ),
                       ),
                       const SizedBox(height: 30),
-                      if (isDesktop)
+                      if (isDesktop) ...[
+                        // -------------------------------------------------------
+                        // ZONA A: SINTESI GLOBALE (Larghezza Piena)
+                        // -------------------------------------------------------
+                        _buildStratifiedTable(
+                          categoryMetrics,
+                          selectedCategory,
+                          (category) =>
+                              setState(() => selectedCategory = category),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // -------------------------------------------------------
+                        // ZONA B: DIAGNOSTICA E CONSENSO (Due Colonne)
+                        // -------------------------------------------------------
+                        IntrinsicHeight(
+                          // Forza le due card ad avere la stessa altezza
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // SINISTRA: Ensemble Consensus (Donut)
+                              Expanded(
+                                flex: 1,
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      buildPanelHeader(
+                                        Icons.group_work,
+                                        "Ensemble Consensus",
+                                      ),
+                                      const SizedBox(height: 20),
+                                      // Usiamo il widget interattivo che abbiamo discusso
+                                      DetailedEnsemblePieChart(
+                                        data: ensembleConsensus,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 24),
+                              // DESTRA: Matrice di Confusione
+                              Expanded(
+                                flex: 1,
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      buildPanelHeader(
+                                        Icons.grid_on,
+                                        "Matrice di Confusione",
+                                      ),
+                                      const SizedBox(height: 20),
+                                      ConfusionMatrixWidget(data: matrixMap),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // -------------------------------------------------------
+                        // ZONA C: VALIDAZIONE TECNICA (Tre Colonne o Layout Misto)
+                        // -------------------------------------------------------
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // COLONNA SINISTRA: Metriche + Matrice
-                            Expanded(
-                              flex:
-                                  1, // Puoi regolare il flex per cambiare le proporzioni
-                              child: Column(
-                                children: [
-                                  // PANNELLO 1: METRICHE
-                                  buildGlassPanel(
-                                    child: Column(
-                                      children: [
-                                        buildPanelHeader(
-                                          Icons.speed,
-                                          "Performance",
-                                        ),
-                                        const SizedBox(height: 20),
-                                        MetricsDashboard(metrics: metrics),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  // PANNELLO 2: MATRICE DI CONFUSIONE
-                                  buildGlassPanel(
-                                    child: Column(
-                                      children: [
-                                        buildPanelHeader(
-                                          Icons.grid_on,
-                                          "Matrice di Confusione",
-                                        ),
-                                        const SizedBox(height: 20),
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: ConfusionMatrixWidget(
-                                            data: matrixMap,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const SizedBox(width: 24),
-
-                            _buildStratifiedTable(
-                              categoryMetrics,
-                              selectedCategory,
-                              (category) {
-                                setState(() {
-                                  selectedCategory = category;
-                                });
-                              },
-                            ),
-
-                            const SizedBox(width: 24),
-                            // COLONNA DESTRA: GRAFICO ROC
+                            // Metriche numeriche (Performance)
                             Expanded(
                               flex: 1,
                               child: buildGlassPanel(
                                 child: Column(
                                   children: [
                                     buildPanelHeader(
-                                      Icons.show_chart,
-                                      "Curva ROC",
+                                      Icons.speed,
+                                      "Performance Globali",
                                     ),
                                     const SizedBox(height: 20),
-                                    // Il grafico si adatterà all'altezza disponibile
-                                    RocCurveChart(points: points),
+                                    MetricsDashboard(metrics: metrics),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            // Curva ROC (Più larga per visibilità)
+                            Expanded(
+                              flex: 2,
+                              child: buildGlassPanel(
+                                child: Column(
+                                  children: [
+                                    buildPanelHeader(
+                                      Icons.show_chart,
+                                      "Analisi Curva ROC",
+                                    ),
                                     const SizedBox(height: 20),
-                                    const Text(
-                                      "L'area sotto la curva (AUC) indica la capacità discriminante del modello. Un valore vicino a 1.0 è ottimale.",
-                                      style: TextStyle(
-                                        color: Colors.white54,
-                                        fontSize: 12,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                      textAlign: TextAlign.center,
+                                    RocCurveChart(
+                                      modelPoints: points,
+                                      shockPoints: shockRiskPoints,
                                     ),
                                   ],
                                 ),
                               ),
                             ),
                           ],
-                        )
-                      else ...[
+                        ),
+                      ] else ...[
                         buildGlassPanel(
                           child: Column(
                             children: [
@@ -363,6 +409,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                             ],
                           ),
                         ),
+
                         const SizedBox(height: 24),
                         // Layout Mobile: Pannelli uno sotto l'altro
                         buildGlassPanel(
@@ -378,12 +425,29 @@ class _EvaluationPageState extends State<EvaluationPage> {
                           ),
                         ),
                         const SizedBox(height: 24),
+
+                        buildGlassPanel(
+                          child: Column(
+                            children: [
+                              buildPanelHeader(
+                                Icons.group_work,
+                                "Ensemble Consensus",
+                              ),
+                              const SizedBox(height: 20),
+                              DetailedEnsemblePieChart(data: ensembleConsensus),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
                         buildGlassPanel(
                           child: Column(
                             children: [
                               buildPanelHeader(Icons.show_chart, "Curva ROC"),
                               const SizedBox(height: 20),
-                              RocCurveChart(points: points),
+                              RocCurveChart(
+                                modelPoints: points,
+                                shockPoints: shockRiskPoints,
+                              ),
                             ],
                           ),
                         ),

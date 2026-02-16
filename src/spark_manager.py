@@ -55,6 +55,4 @@ def load_dataset(ds_path: str):
         except Exception as e:
             logging.error(f"Errore durante il salvataggio del Parquet: {e}")
 
-    logging.info("Dataset Columns: " + ", ".join(_dataset.columns))
-    _dataset.show(5)
     return _dataset

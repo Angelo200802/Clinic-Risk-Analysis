@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 router_model_ev = APIRouter()
 ds: DataFrame = load_dataset(os.getenv("DATASET_PATH"))
-
+ds.show(5)
 def evaluate_by_category(df:DataFrame,category_col):
     categories = [ row[0] for row in df.select(category_col).distinct().collect() ]
 
@@ -71,6 +71,39 @@ evaluation_by_shock_risk = (
         predict_label="ShockRisk" 
     )
 )
+
+ensemble_consensus= (
+    ds.withColumn(
+        "lr_hit", 
+        F.when(
+            ((F.col("Prediction") == "Low Risk") & (F.col("pred_logistic_regression") == 1.0)) |
+            ((F.col("Prediction") == "High Risk") & (F.col("pred_logistic_regression") == 0.0)), 
+            "LR"
+        ).otherwise("")
+    ).withColumn(
+        "mlp_hit", 
+        F.when(
+            ((F.col("Prediction") == "Low Risk") & (F.col("pred_mlp") == 1.0)) |
+            ((F.col("Prediction") == "High Risk") & (F.col("pred_mlp") == 0.0)), 
+            "MLP"
+        ).otherwise("")
+    ).withColumn(
+        "nb_hit", 
+        F.when(
+            ((F.col("Prediction") == "Low Risk") & (F.col("pred_naive_bayes") == 1.0)) |
+            ((F.col("Prediction") == "High Risk") & (F.col("pred_naive_bayes") == 0.0)), 
+            "NB"
+        ).otherwise("")
+    )
+    .withColumn("combination", F.concat_ws("+", F.array_remove(F.array("lr_hit", "mlp_hit", "nb_hit"), "")))
+    .withColumn("combination", F.when(F.col("combination") == "", "Tutti Sbagliano").otherwise(F.col("combination")))
+    .groupBy("combination").count().orderBy(F.desc("count"))
+).toPandas().to_dict(orient="records")
+
+@router_model_ev.get("/evaluation/ensemble_consensus")
+def get_ensemble_consensus():
+    return {"data" : ensemble_consensus}
+
 @router_model_ev.get("/evaluation/confusion_matrix")
 def get_confusion_matrix():
     df_eval = ds.withColumn("Result_Type", 

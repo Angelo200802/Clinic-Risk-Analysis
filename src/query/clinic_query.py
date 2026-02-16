@@ -13,100 +13,66 @@ router_clinic_query = APIRouter()
 
 ds : DataFrame = load_dataset(os.getenv("DATASET_PATH"))
 
-@router_clinic_query.get("/clinic/shockindex")
-def get_shock_index():
-    shock_index_df = (
+
+derived_index = (
         ds
-        .withColumn("ShockIndex", F.col("Heart Rate") / F.col("Systolic Blood Pressure"))
-        .withColumn("ModifiedShockIndex", F.col("Heart Rate") / F.col("Derived_MAP"))
-        .withColumn("AgeShockIndex", F.col("ShockIndex") * F.col("Age"))
-        .withColumn("DiastolicShockIndex", F.col("Heart Rate") / F.col("Diastolic Blood Pressure"))
-    )
-    shock_index_stats = shock_index_df.select(
-        F.col("Patient ID"), 
-        F.col("Heart Rate"), 
-        F.col("Systolic Blood Pressure"), 
-        F.col("ShockIndex"),
-        F.col("ModifiedShockIndex"), 
-        F.col("AgeShockIndex"), 
-        F.col("DiastolicShockIndex")
-    )
-
-    return {
-        "data": shock_index_stats.toPandas().head(5).to_dict(orient="records")
-    }
-
-
-@router_clinic_query.get("/clinic/roxindex")
-def get_rox_index():
-    rox_index_df = ds.withColumn("ROXIndex", F.col("Oxygen Saturation") / F.col("Respiratory Rate"))
-    rox_index_stats = rox_index_df.select(
-        F.col("Patient ID"),
-        F.col("Oxygen Saturation"), 
-        F.col("Respiratory Rate"),
-        F.col("ROXIndex"),
-    )
-
-    return {
-        "data": rox_index_stats.toPandas().head(5).to_dict(orient="records")    
-    }
-
-
-@router_clinic_query.get("/clinic/pulsepressureindex")
-def get_pulse_pressure_index():
-    ppi_df = ds.withColumn("PulsePressureIndex", F.col("Derived_Pulse_Pressure") / F.col("Heart Rate"))
-    ppi_stats = ppi_df.select(
-        F.col("Patient ID"), 
-        F.col("Systolic Blood Pressure"), 
-        F.col("Diastolic Blood Pressure"), 
-        F.col("Derived_Pulse_Pressure"), 
-        F.col("Heart Rate"), 
-        F.col("PulsePressureIndex")
-    )
-
-    return {
-        "data": ppi_stats.toPandas().head(5).to_dict(orient="records")    
-    }
-
-@router_clinic_query.get("/clinic/shockpatients")
-def get_shock_patient(order: str = "desc"):
-    shock_df = ds \
         .withColumn(
-            "ShockIndex", 
-            F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
-        .filter(F.col("ShockIndex") > 0.85) \
-        .orderBy(F.col("ShockIndex").asc() if order == "asc" else F.col("ShockIndex").desc() ) \
-        .select("Patient ID","Heart Rate", "Systolic Blood Pressure", "Prediction", "ShockIndex")
-    pd_shock = shock_df.toPandas()  
-    logging.info(f"Number of patients with Shock Index > 0.9: {len(pd_shock)}") 
+            "ShockIndex",
+              F.col("Heart Rate") / F.col("Systolic Blood Pressure")
+        )
+        .withColumn(
+            "ModifiedShockIndex", 
+            F.col("Heart Rate") / F.col("Derived_MAP")
+        )
+        .withColumn(
+            "AgeShockIndex", 
+            F.col("ShockIndex") * F.col("Age")
+        )
+        .withColumn(
+            "DiastolicShockIndex", 
+            F.col("Heart Rate") / F.col("Diastolic Blood Pressure")
+        )
+        .withColumn(
+            "PulsePressureIndex", 
+            F.col("Derived_Pulse_Pressure") / F.col("Heart Rate")
+        )
+        .withColumn(
+            "Rate_Pressure_Product", 
+            F.col("Heart Rate") * F.col("Systolic Blood Pressure")
+        )
+        .withColumn(
+            "Cardiac_Effort", 
+            F.col("Heart Rate") * F.col("Derived_BMI")
+        )
+    )
+
+avg_index = derived_index.agg( 
+    F.avg("ShockIndex").alias("Avg_ShockIndex"),
+    F.avg("ModifiedShockIndex").alias("Avg_ModifiedShockIndex"),
+    F.avg("AgeShockIndex").alias("Avg_AgeShockIndex"),
+    F.avg("DiastolicShockIndex").alias("Avg_DiastolicShockIndex"),
+    F.avg("PulsePressureIndex").alias("Avg_PulsePressureIndex"),
+    F.avg("Rate_Pressure_Product").alias("Avg_Rate_Pressure_Product"),
+    F.avg("Cardiac_Effort").alias("Avg_Cardiac_Effort")
+).toPandas().to_dict(orient="records")
+
+@router_clinic_query.get("/clinic/derived_indices")
+def get_derived_indices():
     return {
-        "data": pd_shock.head(5).to_dict(orient="records"),
-        "count": len(pd_shock),   
+        "data": avg_index.toPandas().to_dict(orient="records")
     }
 
-@router_clinic_query.get("/clinic/hemodynamicrisk")
-def get_hemodynamic_risk():
-    hemodynamic_risk = ds.withColumn("Shock_Index", F.col("Heart Rate") / F.col("Systolic Blood Pressure")) \
-    .filter((F.col("Derived_MAP") < 70) & (F.col("Shock_Index") > 0.9)) \
-    .select("Patient ID", "Derived_MAP", "Shock_Index", "Risk Category")
-
+@router_clinic_query.get("/clinic/metabolic_bmi")
+def get_metabolic_bmi():
+    metabolic_bmi = (
+        derived_index
+        .select(
+            "Derived_BMI",
+            "Cardiac_Effort",
+            "Risk Category"
+        )
+        .sample(withReplacement=False, fraction=0.05, seed=42)
+    )
     return {
-        "data": hemodynamic_risk.toPandas().head(5).to_dict(orient="records")
-    }
-
-@router_clinic_query.get("/clinic/ratepressure_product")
-def get_rate_pressure_product():
-    rate_pressure_product = ds.withColumn("Rate_Pressure_Product", F.col("Heart Rate") * F.col("Systolic Blood Pressure"))
-    return {
-        "data": rate_pressure_product.select("Patient ID", "Heart Rate", "Systolic Blood Pressure", "Rate_Pressure_Product").toPandas().head(5).to_dict(orient="records")
-    }
-
-@router_clinic_query.get("/clinic/metabolic_effs")
-def get_metabolic_effects():
-    metabolic_stress = ds.withColumn("Cardiac_Effort", F.col("Heart Rate") * F.col("Derived_BMI")) \
-    .groupBy("Risk Category") \
-    .agg(F.avg("Cardiac_Effort").alias("Sforzo_Metabolico_Medio"))
-
-    return {
-        "data": metabolic_stress.toPandas().to_dict(orient="records")
+        "data": metabolic_bmi.toPandas().to_dict(orient="records")
     }

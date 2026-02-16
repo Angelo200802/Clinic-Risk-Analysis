@@ -2,9 +2,14 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
 class RocCurveChart extends StatelessWidget {
-  final List<FlSpot> points;
+  final List<FlSpot> modelPoints;
+  final List<FlSpot> shockPoints;
 
-  const RocCurveChart({super.key, required this.points});
+  const RocCurveChart({
+    super.key,
+    required this.modelPoints,
+    required this.shockPoints,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +50,7 @@ class RocCurveChart extends StatelessWidget {
           lineBarsData: [
             // Linea del Modello
             LineChartBarData(
-              spots: points,
+              spots: modelPoints,
               isCurved: true,
               color: Colors.blueAccent,
               barWidth: 3,
@@ -53,6 +58,17 @@ class RocCurveChart extends StatelessWidget {
               belowBarData: BarAreaData(
                 show: true,
                 color: Colors.blueAccent.withOpacity(0.1),
+              ),
+            ),
+            LineChartBarData(
+              spots: shockPoints,
+              isCurved: true,
+              color: Colors.greenAccent,
+              barWidth: 3,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                color: Colors.greenAccent.withOpacity(0.1),
               ),
             ),
             // Linea di Base (Casuale)

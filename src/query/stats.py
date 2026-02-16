@@ -63,6 +63,25 @@ def get_columns():
 
 vital_signs = get_columns()
 
+def get_demographic_stress_map(ds:DataFrame):
+    ds_with_decades = (
+        ds
+        .withColumn(
+            "Age_Decade", (F.floor(F.col("Age") / 10) * 10).cast("string")
+        )
+    )
+    
+    if not 'demographic_stress_map' in _cache:
+        _cache['demographic_stress_map'] = (
+            add_bmi_category(ds_with_decades)
+            .groupBy("BMI_Category")
+            .pivot("Age_Decade")
+            .agg(
+                F.round(F.avg("Systolic Blood Pressure"), 1)
+            )
+        ).toPandas().to_dict(orient="records")
+    
+    return _cache['demographic_stress_map']
 
 def get_column_stats(df:DataFrame,column_name: str):
     
@@ -148,6 +167,10 @@ def get_bmi_risk():
         )
 
     return {"data" : _cache['riks_by_bmi']}
+
+@router_stats.get("/stats/demographic_stress_map")
+def get_demographic_stress_map_api():
+    return {"data": get_demographic_stress_map(ds)}
 
 @router_stats.get("/stats/risk_composition")
 def get_risk_composition():
