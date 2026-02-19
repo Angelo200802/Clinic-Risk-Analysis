@@ -42,7 +42,7 @@ class _InsigthPageState extends State<InsigthPage> {
       fetchGet(url, 'clinic/top_cardiac_stress'),
       fetchGet(url, 'clinic/obesity_mismatch'),
       fetchGet(url, 'clinic/occult_shock'),
-      fetchGet(url, 'clinic/k_nearest?fraction=0.03'),
+      fetchGet(url, 'clinic/k_nearest?fraction=0.01'),
     ]);
   }
 
@@ -231,9 +231,9 @@ class _InsigthPageState extends State<InsigthPage> {
 
                                     yLabel: "Pulse Pressure Index (PP / HR)",
 
-                                    highRiskColor: Colors.redAccent,
+                                    highRiskColor: Colors.orangeAccent,
 
-                                    lowRiskColor: Colors.greenAccent,
+                                    lowRiskColor: Colors.blue,
                                   ),
                                 ),
                               ],

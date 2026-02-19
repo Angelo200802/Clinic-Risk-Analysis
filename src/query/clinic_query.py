@@ -112,7 +112,7 @@ def get_occult_shock():
     }
 
 @router_clinic_query.get("/clinic/k_nearest")
-def get_k_nearest(fraction: float = 0.05):
+def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
     high_risk_center = (
         ds
         .filter(F.col("Risk Category") == "High Risk")
@@ -133,7 +133,7 @@ def get_k_nearest(fraction: float = 0.05):
               F.pow(F.col("Systolic Blood Pressure") - high_risk_center['sbp'], 2))
         ) 
         .filter(
-            (F.col("Dist") < 20) & (F.col("Dist") >= 1)
+            (F.col("Dist") < radius) & (F.col("Dist") >= 1)
         )
         .orderBy("Dist")
         .select("Heart Rate", "Systolic Blood Pressure", "Risk Category")
