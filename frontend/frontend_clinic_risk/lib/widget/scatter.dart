@@ -1,10 +1,25 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-class MetabolicEffortChart extends StatelessWidget {
+class ClinicScatterChart extends StatelessWidget {
   final List<dynamic> scatterData;
+  final String xKey;
+  final String yKey;
+  final String xLabel;
+  final String yLabel;
+  final Color highRiskColor;
+  final Color lowRiskColor;
 
-  const MetabolicEffortChart({super.key, required this.scatterData});
+  const ClinicScatterChart({
+    super.key,
+    required this.scatterData,
+    required this.xKey,
+    required this.yKey,
+    required this.xLabel,
+    required this.yLabel,
+    required this.highRiskColor,
+    required this.lowRiskColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -12,18 +27,18 @@ class MetabolicEffortChart extends StatelessWidget {
       ScatterChartData(
         scatterSpots: scatterData.map((point) {
           final isHighRisk = point['Risk Category'] == "High Risk";
-          final x = (point['ShockIndex'] as num? ?? 0).toDouble();
-          final y = (point['PulsePressureIndex'] as num? ?? 0).toDouble();
+          final x = (point[xKey] as num? ?? 0).toDouble();
+          final y = (point[yKey] as num? ?? 0).toDouble();
 
           return ScatterSpot(
             x,
             y,
             dotPainter: FlDotCirclePainter(
-              radius: isHighRisk ? 5 : 3,
+              radius: 4,
               color: isHighRisk
-                  ? Colors.orangeAccent
-                  : Colors.blueAccent.withOpacity(0.5),
-              strokeWidth: isHighRisk ? 1 : 0,
+                  ? highRiskColor.withOpacity(0.7)
+                  : lowRiskColor.withOpacity(0.5),
+              strokeWidth: 1,
               strokeColor: Colors.white,
             ),
           );
@@ -31,14 +46,14 @@ class MetabolicEffortChart extends StatelessWidget {
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
             axisNameWidget: Text(
-              "Shock Index (HR / SBP)",
+              xLabel,
               style: TextStyle(color: Colors.white70),
             ),
             sideTitles: SideTitles(showTitles: true, reservedSize: 30),
           ),
           leftTitles: AxisTitles(
             axisNameWidget: Text(
-              "Pulse Pressure Index (PP / HR)",
+              yLabel,
               style: TextStyle(color: Colors.white70),
             ),
             sideTitles: SideTitles(showTitles: true, reservedSize: 40),

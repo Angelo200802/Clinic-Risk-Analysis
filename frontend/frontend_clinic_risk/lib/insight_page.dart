@@ -149,8 +149,14 @@ class _InsigthPageState extends State<InsigthPage> {
                               const SizedBox(height: 16),
                               SizedBox(
                                 height: 300,
-                                child: MetabolicEffortChart(
+                                child: ClinicScatterChart(
                                   scatterData: points,
+                                  xKey: "ShockIndex",
+                                  yKey: "PulsePressureIndex",
+                                  xLabel: "Shock Index (HR / SBP)",
+                                  yLabel: "Pulse Pressure Index (PP / HR)",
+                                  highRiskColor: Colors.redAccent,
+                                  lowRiskColor: Colors.greenAccent,
                                 ),
                               ),
                             ],
@@ -258,8 +264,14 @@ class _InsigthPageState extends State<InsigthPage> {
                               const SizedBox(height: 16),
                               SizedBox(
                                 height: 300,
-                                child: MetabolicEffortChart(
+                                child: ClinicScatterChart(
                                   scatterData: points,
+                                  xKey: "ShockIndex",
+                                  yKey: "PulsePressureIndex",
+                                  xLabel: "Shock Index (HR / SBP)",
+                                  yLabel: "Pulse Pressure Index (PP / HR)",
+                                  highRiskColor: Colors.redAccent,
+                                  lowRiskColor: Colors.greenAccent,
                                 ),
                               ),
                             ],
