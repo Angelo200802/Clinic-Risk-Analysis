@@ -66,9 +66,13 @@ def get_top_cardiac_stress():
         derived_index
         .withColumn(
             "rank", 
-            F.row_number().over(
-                Window.partitionBy("Gender")
-                .orderBy(F.col("Rate_Pressure_Product").desc()) 
+            F.row_number()
+            .over(
+                Window
+                .partitionBy("Gender")
+                .orderBy(
+                    F.col("Rate_Pressure_Product").desc()
+                ) 
             )
         )
         .filter(F.col("rank") <= 5)
@@ -85,7 +89,7 @@ def get_obesity_mismatch():
             (F.col("Derived_BMI") > 35) & 
             (F.col("ModifiedShockIndex") < 0.7)
         )
-        .select("Patient ID", "Derived_BMI", "ModifiedShockIndex", "Heart Rate", "Risk Category") \
+        .select("Patient ID", "Derived_BMI", "ModifiedShockIndex", "Heart Rate", "Risk Category")
         .limit(5)
     )
     return {

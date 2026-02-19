@@ -278,7 +278,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       const Icon(
-                        Icons.analytics_outlined,
+                        Icons.align_vertical_bottom_sharp,
                         color: Colors.blueAccent,
                         size: 40,
                       ),

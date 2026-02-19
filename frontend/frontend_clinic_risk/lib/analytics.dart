@@ -115,7 +115,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                   child: Column(
                     children: [
                       const Icon(
-                        Icons.history_edu_outlined,
+                        Icons.analytics_outlined,
                         color: Colors.blueAccent,
                         size: 40,
                       ),
