@@ -21,7 +21,7 @@ class CardiacStressRanking extends StatelessWidget {
               Tab(icon: Icon(Icons.female), text: "Donne"),
             ],
             indicatorColor: Colors.redAccent,
-            labelColor: Colors.redAccent,
+            labelColor: Colors.white,
           ),
           SizedBox(
             height: 400, // Altezza fissa per lo scroll interno

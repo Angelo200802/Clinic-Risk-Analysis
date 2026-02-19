@@ -136,10 +136,17 @@ def get_k_nearest(fraction: float = 0.05):
             (F.col("Dist") < 20) & (F.col("Dist") >= 1)
         )
         .orderBy("Dist")
+        .select("Heart Rate", "Systolic Blood Pressure", "Risk Category")
         .sample(withReplacement=False, fraction=fraction, seed=42)
     )
     return {
-        "data": near_failure.toPandas().to_dict(orient="records")
+        "data": near_failure.toPandas().to_dict(orient="records") + [
+            {
+                "Heart Rate": high_risk_center['hr'],
+                "Systolic Blood Pressure": high_risk_center['sbp'], 
+                "Risk Category": "High Risk"
+            }
+        ],
     }
 
 @router_clinic_query.get("/clinic/metabolic_shockindex")
