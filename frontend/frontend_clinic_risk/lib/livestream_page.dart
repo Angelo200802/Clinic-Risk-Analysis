@@ -3,7 +3,7 @@ import 'package:flutter/material.dart' hide Chip;
 import 'package:frontend_clinic_risk/types/indexclass.dart';
 import 'package:frontend_clinic_risk/widget/badgeswidget.dart';
 import 'package:frontend_clinic_risk/widget/feature.dart';
-import 'package:frontend_clinic_risk/widget/lineargauge.dart';
+import 'package:frontend_clinic_risk/widget/radarchart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
 import 'widget/classification_panel.dart';
@@ -15,6 +15,7 @@ import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
 import 'widget/circularsummary.dart';
+import 'evaluation.dart';
 
 const dynamic payload = {
   'sensor_update': {
@@ -68,7 +69,6 @@ const dynamic payload = {
     'diastolic_shock_index': 1.0862068965517242,
     'rate_pp': 12568.5,
     'pp_index': 0.48677248677248675,
-    'rox_index': 7.385270374280049,
   },
   'pattern': {
     'progressive_hemo_deterioration': 1,
@@ -510,123 +510,166 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
+  dynamic addRiskCategory() {
+    String riskCategory =
+        allPatients[selectedPatientId]!.sensorUpdate.prediction;
+    return {
+      "Risk Category": riskCategory,
+      "Avg_ShockIndex": allPatients[selectedPatientId]!.index.shockIndex,
+      "Avg_ModifiedShockIndex":
+          allPatients[selectedPatientId]!.index.modifiedShockIndex,
+      "Avg_AgeShockIndex_Norm":
+          allPatients[selectedPatientId]!.index.ageIndex / 100,
+      "Avg_DiastolicShockIndex":
+          allPatients[selectedPatientId]!.index.diastolicShockIndex,
+      "Avg_PulsePressureIndex": allPatients[selectedPatientId]!.index.ppIndex,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        color: const Color.fromARGB(255, 46, 46, 46),
+      backgroundColor: const Color(
+        0xFF0F0F0F,
+      ), // Sfondo ancora più scuro per far risaltare i neon
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          // Organizziamo lo schermo in due grandi righe (Top e Bottom)
           children: [
+            // --- RIGA SUPERIORE (Quadrante 1 e 2) ---
             Expanded(
-              flex: 1, // Metà dell'altezza totale
+              flex:
+                  5, // Leggermente più spazio alla parte superiore per i parametri vitali
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // 1° Quadrante: Classificazione Live (Sinistra)
                   Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [Expanded(child: _buildStreamPanel())],
-                      ),
-                    ),
+                    flex: 1,
+                    child: buildGlassPanel(child: _buildStreamPanel()),
                   ),
-                  const SizedBox(width: 20), // Spazio tra i due quadranti
+                  const SizedBox(width: 16),
+
+                  // 2° Quadrante: Dettagli, Gauge e Badge (Destra)
                   Expanded(
+                    flex: 1,
                     child: Column(
                       children: [
-                        const SizedBox(height: 15),
-                        if (selectedPatientId != null &&
-                            allTrends[selectedPatientId]?.isNotEmpty == true)
-                          IntrinsicHeight(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: buildGlassPanel(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        const Text(
-                                          "QUICK STATUS",
-                                          style: TextStyle(
-                                            color: Colors.white54,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                        const Divider(
-                                          color: Colors.white10,
-                                          height: 20,
-                                        ),
-                                        CircularSummaryPanel(
-                                          trend: allTrends[selectedPatientId]!
-                                              .last,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 15),
-                                Expanded(
-                                  child: buildGlassPanel(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceEvenly,
-                                      children: [
-                                        const Text(
-                                          "VITAL COLUMNS",
-                                          style: TextStyle(
-                                            color: Colors.white54,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-
-                                        Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceEvenly,
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
-                                          children: [
-                                            LinearGauge(
-                                              value:
-                                                  allTrends[selectedPatientId]!
-                                                      .last
-                                                      .avgTemp,
-                                              getColor: getColor,
-                                            ),
-                                            VerticalBulletChart(
-                                              value:
-                                                  allTrends[selectedPatientId]!
-                                                      .last
-                                                      .avgMap,
-                                              target: 90,
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 15),
-                        IntrinsicHeight(
+                        // Sotto-riga 1: Quick Status & Vital Gauges
+                        Expanded(
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Expanded(
-                                child: FeaturePanel(
-                                  insights:
-                                      (selectedPatientId != null &&
-                                          allTrends[selectedPatientId]
-                                                  ?.isNotEmpty ==
-                                              true)
-                                      ? getFeatureInsights(
-                                          allTrends[selectedPatientId]!.last,
-                                        )
-                                      : [],
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "QUICK STATUS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      Expanded(
+                                        child:
+                                            selectedPatientId != null &&
+                                                allTrends[selectedPatientId]
+                                                        ?.isNotEmpty ==
+                                                    true
+                                            ? CircularSummaryPanel(
+                                                trend:
+                                                    allTrends[selectedPatientId]!
+                                                        .last,
+                                              )
+                                            : _buildSimplePlaceholder(
+                                                "Seleziona paziente",
+                                              ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              const SizedBox(width: 15),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "EMODYNAMIC STATUS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      selectedPatientId != null
+                                          ? Expanded(
+                                              child: SingleChildScrollView(
+                                                physics:
+                                                    const BouncingScrollPhysics(),
+                                                child: ClinicalRadarChart(
+                                                  radarData: [
+                                                    addRiskCategory(),
+                                                  ],
+                                                ),
+                                              ),
+                                            )
+                                          : _buildSimplePlaceholder(
+                                              "Seleziona paziente",
+                                            ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Sotto-riga 2: Feature Insights & Risk Indicators
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "TREND INSIGHTS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          child: FeaturePanel(
+                                            insights:
+                                                (selectedPatientId != null &&
+                                                    allTrends[selectedPatientId]
+                                                            ?.isNotEmpty ==
+                                                        true)
+                                                ? getFeatureInsights(
+                                                    allTrends[selectedPatientId]!
+                                                        .last,
+                                                  )
+                                                : [],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
                               Expanded(
                                 child: _buildRiskBadgesPanel({
                                   "hemo_deterioration":
@@ -657,30 +700,53 @@ class _LivestreamPageState extends State<LivestreamPage> {
               ),
             ),
 
-            // RIGA INFERIORE (Quadranti 3 e 4)
+            const SizedBox(height: 16),
+
+            // --- RIGA INFERIORE (Quadrante 3 e 4) ---
             Expanded(
-              flex: 1, // L'altra metà dell'altezza
+              flex: 4, // Parte inferiore per liste e grafici temporali
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 3° Quadrante: Pannello con il grafico
+                  // 3° Quadrante: Lista Triage (Sinistra)
                   Expanded(
-                    child: TriageMasterView(
-                      allPatients: allPatients.map(
-                        (key, value) => MapEntry(key, value.sensorUpdate),
+                    flex: 1,
+                    child: buildGlassPanel(
+                      child: TriageMasterView(
+                        allPatients: allPatients.map(
+                          (key, value) => MapEntry(key, value.sensorUpdate),
+                        ),
+                        selectedPatientId: selectedPatientId,
+                        onPatientSelected: (p) =>
+                            setState(() => selectedPatientId = p.patientId),
                       ),
-                      selectedPatientId: selectedPatientId,
-                      onPatientSelected: (p) {
-                        setState(() {
-                          selectedPatientId = p.patientId;
-                        });
-                      },
                     ),
                   ),
-                  Expanded(child: _buildChart()),
+                  const SizedBox(width: 16),
+                  // 4° Quadrante: Grafico Temporale (Destra)
+                  Expanded(
+                    flex: 1,
+                    child:
+                        _buildChart(), // Questo widget ha già il suo stile interno
+                  ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Helper per i placeholder quando non c'è selezione
+  Widget _buildSimplePlaceholder(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white10,
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
         ),
       ),
     );

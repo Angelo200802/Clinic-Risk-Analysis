@@ -56,7 +56,7 @@ pipe = Pipeline(stages=[indexer_gender, indexer_risk, assembler,scaler,assembler
 
 paramGrid = (ParamGridBuilder()
              .addGrid(lr.regParam, [0.0001,0.001,0.01,0.1,1])#[i for i in np.arange(0,0.11,0.01)])
-             .addGrid(lr.elasticNetParam, [0.0,0.5,0.9,1])#[i for i in np.arange(0,1.1,0.1)]) 
+             .addGrid(lr.elasticNetParam, [0.0,0.5,1])#[i for i in np.arange(0,1.1,0.1)]) 
              .addGrid(lr.maxIter, [10,100,1000])#[i for i in range(0,100,10)])               
              .build())
 
@@ -105,15 +105,11 @@ def evaluate_model(predictions: DataFrame,label,predict_label="Prediction"):
     
     metrics_raw = BinaryClassificationMetrics(results_rdd)
     try:
-        # Proviamo la via standard (Java-backed)
         roc_rdd = metrics_raw._java_model.roc().toJavaRDD().collect()
         roc_points = [(float(p.get_field(0)), float(p.get_field(1))) for p in roc_rdd]
     except:
-        # Fallback se Spark non collabora: creiamo una curva minima (0,0 -> AUC -> 1,1)
-        # o inviamo solo i punti estremi
         roc_points = [(0.0, 0.0), (0.1, auc_roc * 0.8), (0.5, auc_roc), (1.0, 1.0)]
 
-    # Campionamento per il frontend
     step = max(1, len(roc_points) // 50)
     sampled_roc = [{"fpr": float(p[0]), "tpr": float(p[1])} for p in roc_points[::step]]
     if sampled_roc[-1]["fpr"] < 1.0:

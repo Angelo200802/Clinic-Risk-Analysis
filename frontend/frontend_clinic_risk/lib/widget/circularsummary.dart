@@ -72,47 +72,87 @@ class CircularSummaryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        CircularSummary(
-          title: "SpO₂",
-          value: trend.avgSpo2,
-          color: Colors.redAccent,
-        ),
-        CircularSummary(
-          title: "Risk Ratio",
-          value: trend.riskRatio * 100,
-          color: Colors.orangeAccent,
-        ),
-        CircularSummary(
-          title: "HRV",
-          value: trend.avgHrv,
-          color: Colors.blueAccent,
-        ),
-        Column(
-          children: [
-            Text(
-              "BMI CLASS",
-              style: const TextStyle(
-                fontSize: 9,
-                color: Colors.white54,
-                letterSpacing: 1.1,
-                fontWeight: FontWeight.bold,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularSummary(
+                title: "SpO₂",
+                value: trend.avgSpo2,
+                color: Colors.redAccent,
               ),
-            ),
-            Text(
-              trend.bmiClass,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.white,
-                letterSpacing: 1.1,
-                fontWeight: FontWeight.bold,
+              const SizedBox(width: 20),
+              CircularSummary(
+                title: "Risk Ratio",
+                value: trend.riskRatio * 100,
+                color: Colors.orangeAccent,
               ),
-            ),
-          ],
-        ),
-      ],
+              const SizedBox(width: 20),
+              CircularSummary(
+                title: "HRV",
+                value: trend.avgHrv,
+                color: Colors.blueAccent,
+              ),
+            ],
+          ),
+          const SizedBox(width: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Column(
+                children: [
+                  Text(
+                    "BMI CLASS",
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    trend.bmiClass,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 40),
+              Column(
+                children: [
+                  Text(
+                    "Number of Samples",
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    trend.nSamples.toString(),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

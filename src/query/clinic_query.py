@@ -117,8 +117,8 @@ def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
         ds
         .filter(F.col("Risk Category") == "High Risk")
         .agg(
-            F.median("Heart Rate").alias("hr")
-            , F.median("Systolic Blood Pressure").alias("sbp")
+            F.median("Derived_MAP").alias("map")
+            , F.median("Derived_BMI").alias("bmi")
         )
         .collect()[0]
     )
@@ -128,22 +128,22 @@ def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
         .filter(F.col("Risk Category") == "Low Risk")
         .withColumn(
             "Dist",
-              F.sqrt(F.pow(F.col("Heart Rate") - high_risk_center['hr'], 2) 
+              F.sqrt(F.pow(F.col("Derived_MAP") - high_risk_center['map'], 2) 
               + 
-              F.pow(F.col("Systolic Blood Pressure") - high_risk_center['sbp'], 2))
+              F.pow(F.col("Derived_BMI") - high_risk_center['bmi'], 2))
         ) 
         .filter(
             (F.col("Dist") < radius) & (F.col("Dist") >= 1)
         )
         .orderBy("Dist")
-        .select("Heart Rate", "Systolic Blood Pressure", "Risk Category")
+        .select("Derived_MAP", "Derived_BMI", "Risk Category")
         .sample(withReplacement=False, fraction=fraction, seed=42)
     )
     return {
         "data": near_failure.toPandas().to_dict(orient="records") + [
             {
-                "Heart Rate": high_risk_center['hr'],
-                "Systolic Blood Pressure": high_risk_center['sbp'], 
+                "Derived_MAP": high_risk_center['map'],
+                "Derived_BMI": high_risk_center['bmi'], 
                 "Risk Category": "High Risk"
             }
         ],

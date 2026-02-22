@@ -5,7 +5,6 @@ class CalculatedIndex {
   double diastolicShockIndex;
   double ratePp;
   double ppIndex;
-  double roxIndex;
 
   CalculatedIndex({
     required this.shockIndex,
@@ -14,7 +13,6 @@ class CalculatedIndex {
     required this.diastolicShockIndex,
     required this.ratePp,
     required this.ppIndex,
-    required this.roxIndex,
   });
 
   factory CalculatedIndex.fromJson(Map<String, dynamic> json) {
@@ -25,7 +23,6 @@ class CalculatedIndex {
       diastolicShockIndex: json['diastolic_shock_index'],
       ratePp: json['rate_pp'],
       ppIndex: json['pp_index'],
-      roxIndex: json['rox_index'],
     );
   }
 }

@@ -111,19 +111,7 @@ def get_stats(signs:str):
     if "error" in results:
         raise HTTPException(status_code=404, detail=results["error"])
     
-    return results
-
-@router_stats.get("/stats/summary")
-def get_summary_stats():
-    comparison_stats = ds\
-        .groupBy("Risk Category")\
-        .agg(
-            F.avg("Heart Rate").alias("Avg_HR"),
-            F.avg("Systolic Blood Pressure").alias("Avg_SBP"),
-            F.avg("Derived_Pulse_Pressure").alias("Avg_DPP"),
-            F.avg("Derived_BMI").alias("Avg_BMI"),
-        )
-    return comparison_stats.toPandas().to_dict(orient="records")    
+    return results 
 
 
 @router_stats.get("/stats/age_risk")

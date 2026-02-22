@@ -42,7 +42,7 @@ class _InsigthPageState extends State<InsigthPage> {
       fetchGet(url, 'clinic/top_cardiac_stress'),
       fetchGet(url, 'clinic/obesity_mismatch'),
       fetchGet(url, 'clinic/occult_shock'),
-      fetchGet(url, 'clinic/k_nearest?fraction=0.01'),
+      fetchGet(url, 'clinic/k_nearest?fraction=0.01&radius=5.0'),
     ]);
   }
 
@@ -190,10 +190,10 @@ class _InsigthPageState extends State<InsigthPage> {
                                         child: ClinicScatterChart(
                                           scatterData:
                                               snapshot.data![5]['data'],
-                                          xKey: "Heart Rate",
-                                          yKey: "Systolic Blood Pressure",
-                                          xLabel: "Heart Rate (BPM)",
-                                          yLabel: "Systolic BP (mmHg)",
+                                          xKey: "Derived_MAP",
+                                          yKey: "Derived_BMI",
+                                          xLabel: "Derived MAP (mmHg)",
+                                          yLabel: "Derived BMI",
                                           highRiskColor: Colors.redAccent,
                                           lowRiskColor: Colors.greenAccent,
                                         ),

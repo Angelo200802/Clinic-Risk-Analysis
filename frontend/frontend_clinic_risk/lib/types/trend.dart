@@ -79,4 +79,28 @@ class Trend {
       riskRatio: (json['risk_ratio'] as num? ?? 0.0).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'Patient ID': patientId,
+      'avg_hr': avgHr,
+      'avg_rr': avgRr,
+      'avg_spo2': avgSpo2,
+      'avg_temp': avgTemp,
+      'avg_map': avgMap,
+      'avg_hrv': avgHrv,
+      'std_hr': stdHr,
+      'n_samples': nSamples,
+      'hr_pct': hrPct,
+      'rr_pct': rrPct,
+      'spo2_pct': spo2Pct,
+      'pp_pct': ppPct,
+      'map_pct': mapPct,
+      'start': start,
+      'end': end,
+      'Timestamp': timestamp,
+      'bmi_class': bmiClass,
+      'risk_ratio': riskRatio,
+    };
+  }
 }

@@ -235,13 +235,7 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
             .withColumn(
                 "pp_index",
                 F.col("avg_pp") / F.col("avg_hr")
-            )
-            .withColumn(
-                "rox_index",
-                F.col("avg_spo2") / F.col("avg_rr")
-            )
-
-            
+            )       
         )
 
         for row in df_with_trend.collect():

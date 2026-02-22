@@ -8,14 +8,47 @@ class ClinicalRadarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Estrazione dei dataset dal JSON
-    final highRisk = radarData.firstWhere(
-      (e) => e["Risk Category"] == "High Risk",
-    );
-    final lowRisk = radarData.firstWhere(
-      (e) => e["Risk Category"] == "Low Risk",
-    );
+    dynamic highRisk;
+    try {
+      highRisk = radarData.firstWhere(
+        (element) => element["Risk Category"] == "High Risk",
+      );
+    } catch (e) {
+      highRisk = {};
+    }
 
+    dynamic lowRisk;
+    try {
+      lowRisk = radarData.firstWhere(
+        (element) => element["Risk Category"] == "Low Risk",
+      );
+    } catch (e) {
+      lowRisk = {};
+    }
+    List<RadarDataSet> dataSets = [];
+    if (highRisk.isNotEmpty) {
+      dataSets.add(
+        RadarDataSet(
+          fillColor: Colors.redAccent.withOpacity(0.3),
+          borderColor: Colors.redAccent,
+          entryRadius: 3,
+          dataEntries: _extractEntries(highRisk),
+          borderWidth: 2,
+        ),
+      );
+    }
+    if (lowRisk.isNotEmpty) {
+      // Dataset Low Risk - Blu
+      dataSets.add(
+        RadarDataSet(
+          fillColor: Colors.greenAccent.withOpacity(0.3),
+          borderColor: Colors.greenAccent,
+          entryRadius: 3,
+          dataEntries: _extractEntries(lowRisk),
+          borderWidth: 2,
+        ),
+      );
+    }
     return AspectRatio(
       aspectRatio: 1.3,
       child: RadarChart(
@@ -30,24 +63,7 @@ class ClinicalRadarChart extends StatelessWidget {
           // Impostiamo il numero di cerchi della griglia
           tickCount: 5,
 
-          dataSets: [
-            // Dataset High Risk - Rosso
-            RadarDataSet(
-              fillColor: Colors.redAccent.withOpacity(0.3),
-              borderColor: Colors.redAccent,
-              entryRadius: 3,
-              dataEntries: _extractEntries(highRisk),
-              borderWidth: 2,
-            ),
-            // Dataset Low Risk - Blu
-            RadarDataSet(
-              fillColor: Colors.greenAccent.withOpacity(0.3),
-              borderColor: Colors.greenAccent,
-              entryRadius: 3,
-              dataEntries: _extractEntries(lowRisk),
-              borderWidth: 2,
-            ),
-          ],
+          dataSets: dataSets,
 
           // Configurazione etichette sui vertici
           getTitle: (index, angle) {
@@ -72,14 +88,14 @@ class ClinicalRadarChart extends StatelessWidget {
       ),
     );
   }
+}
 
-  List<RadarEntry> _extractEntries(Map<String, dynamic> data) {
-    return [
-      RadarEntry(value: data["Avg_ShockIndex"].toDouble()),
-      RadarEntry(value: data["Avg_ModifiedShockIndex"].toDouble()),
-      RadarEntry(value: data["Avg_AgeShockIndex_Norm"].toDouble()),
-      RadarEntry(value: data["Avg_DiastolicShockIndex"].toDouble()),
-      RadarEntry(value: data["Avg_PulsePressureIndex"].toDouble()),
-    ];
-  }
+List<RadarEntry> _extractEntries(Map<String, dynamic> data) {
+  return [
+    RadarEntry(value: data["Avg_ShockIndex"].toDouble()),
+    RadarEntry(value: data["Avg_ModifiedShockIndex"].toDouble()),
+    RadarEntry(value: data["Avg_AgeShockIndex_Norm"].toDouble()),
+    RadarEntry(value: data["Avg_DiastolicShockIndex"].toDouble()),
+    RadarEntry(value: data["Avg_PulsePressureIndex"].toDouble()),
+  ];
 }
