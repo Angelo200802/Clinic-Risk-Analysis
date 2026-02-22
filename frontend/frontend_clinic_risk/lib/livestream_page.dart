@@ -530,7 +530,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(
-        0xFF0F0F0F,
+        0xFF121212,
       ), // Sfondo ancora più scuro per far risaltare i neon
       body: Padding(
         padding: const EdgeInsets.all(16.0),

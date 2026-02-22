@@ -233,12 +233,14 @@ class _EvaluationPageState extends State<EvaluationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A), // Mantengo il tuo stile dark
+      backgroundColor: const Color(0xFF121212), // Mantengo il tuo stile dark
       body: FutureBuilder<List<dynamic>>(
         future: combinedData,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.blueAccent),
+            );
           }
 
           if (snapshot.hasError) {

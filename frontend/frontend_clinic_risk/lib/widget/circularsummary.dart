@@ -34,6 +34,7 @@ class CircularSummary extends StatelessWidget {
                     strokeWidth: 6,
                     backgroundColor: Colors.white10,
                     valueColor: AlwaysStoppedAnimation<Color>(color),
+                    color: Colors.blueAccent,
                   );
                 },
               ),
