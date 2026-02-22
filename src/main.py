@@ -4,8 +4,9 @@ from query.clinic_query import router_clinic_query
 from query.model_evaluation import router_model_ev
 from query.stats import router_stats
 from streaming import router_streaming, start_streaming
-import logging, dotenv,os, asyncio
+import logging, dotenv, asyncio
 import bus
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +25,14 @@ app.include_router(router_stats)
 app.include_router(router_clinic_query)
 app.include_router(router_model_ev)
 app.include_router(router_streaming)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In produzione metti l'URL specifico (es: http://localhost:3000)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def hello_world():
