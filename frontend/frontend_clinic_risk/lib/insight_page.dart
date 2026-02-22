@@ -42,7 +42,7 @@ class _InsigthPageState extends State<InsigthPage> {
       fetchGet(url, 'clinic/top_cardiac_stress'),
       fetchGet(url, 'clinic/obesity_mismatch'),
       fetchGet(url, 'clinic/occult_shock'),
-      fetchGet(url, 'clinic/k_nearest?fraction=0.01&radius=5.0'),
+      fetchGet(url, 'clinic/k_nearest?fraction=0.01&radius=3.0'),
     ]);
   }
 

@@ -133,7 +133,7 @@ def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
               F.pow(F.col("Derived_BMI") - high_risk_center['bmi'], 2))
         ) 
         .filter(
-            (F.col("Dist") < radius) & (F.col("Dist") >= 1)
+            (F.col("Dist") < radius) & (F.col("Dist") >= 0.01)
         )
         .orderBy("Dist")
         .select("Derived_MAP", "Derived_BMI", "Risk Category")
