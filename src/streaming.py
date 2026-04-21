@@ -127,6 +127,7 @@ def send_update(update_row: Row):
     dict_row.pop('window')
     dict_row['Timestamp'] = dict_row.pop('Timestamp').isoformat() if dict_row['Timestamp'] else ""
     update_row = {
+                "type" : "update",
                 "sensor_update" : {
                     k : v for k, v in dict_row.items() if k in columns
                 },

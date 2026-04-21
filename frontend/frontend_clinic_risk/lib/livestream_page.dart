@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart' hide Chip;
 import 'package:frontend_clinic_risk/types/indexclass.dart';
+import 'package:frontend_clinic_risk/widget/ai_widget.dart';
 import 'package:frontend_clinic_risk/widget/badgeswidget.dart';
 import 'package:frontend_clinic_risk/widget/feature.dart';
 import 'package:frontend_clinic_risk/widget/radarchart.dart';
@@ -15,6 +16,7 @@ import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
 import 'widget/circularsummary.dart';
+import 'package:http/http.dart' as http;
 
 const dynamic payload = {
   'sensor_update': {
@@ -213,6 +215,31 @@ class _LivestreamPageState extends State<LivestreamPage> {
   SensorUpdate? _lastUpdate;
   int? selectedPatientId;
   String label = "Heart Rate";
+  bool _showAiPanel = false;
+  final Map<int, StringBuffer> _aiStreams = {}; // buffer per paziente
+  final Map<int, String> _aiResponses = {}; // risposta completa finale
+  bool _aiStreaming = false;
+
+  Future<void> _requestAiExplanation(int patientId) async {
+    setState(() {
+      _showAiPanel = true;
+      _aiStreaming = true;
+      _aiStreams[patientId] = StringBuffer(); // reset buffer
+    });
+
+    try {
+      final uri = Uri.parse(
+        '${dotenv.env['BACKEND_BASE_API']!}?patient_id=$patientId',
+      );
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        debugPrint('Explain endpoint error: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Explain request failed: $e');
+      setState(() => _aiStreaming = false);
+    }
+  }
 
   void _connect() async {
     if (!mounted || _isConnecting) return;
@@ -239,32 +266,50 @@ class _LivestreamPageState extends State<LivestreamPage> {
         (message) {
           try {
             final data = jsonDecode(message);
-            SensorUpdate sensorUpdate = SensorUpdate.fromJson(
-              data['sensor_update'],
-            );
-            CalculatedIndex index = CalculatedIndex.fromJson(data['index']);
-            Pattern pattern = Pattern.fromJson(data['pattern']);
-            setState(() {
-              allPatients[sensorUpdate.patientId] = Record(
-                sensorUpdate: sensorUpdate,
-                index: index,
-                pattern: pattern,
+            if (data['type'] == 'update') {
+              SensorUpdate sensorUpdate = SensorUpdate.fromJson(
+                data['sensor_update'],
               );
-              _lastUpdate = sensorUpdate;
-            });
-
-            debugPrint("Ricevuto trend per patient ${data['trend_update']}}");
-            Trend trend = Trend.fromJson(data['trend_update']);
-
-            setState(() {
-              allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
-              allTrends[trend.patientId]!.add(trend);
-              DateTime actualTime = DateTime.parse(trend.start);
-              allTrends[trend.patientId]?.removeWhere((t) {
-                DateTime startTime = DateTime.parse(t.start);
-                return actualTime.difference(startTime).inMinutes > 5;
+              CalculatedIndex index = CalculatedIndex.fromJson(data['index']);
+              Pattern pattern = Pattern.fromJson(data['pattern']);
+              setState(() {
+                allPatients[sensorUpdate.patientId] = Record(
+                  sensorUpdate: sensorUpdate,
+                  index: index,
+                  pattern: pattern,
+                );
+                _lastUpdate = sensorUpdate;
               });
-            });
+
+              debugPrint("Ricevuto trend per patient ${data['trend_update']}}");
+              Trend trend = Trend.fromJson(data['trend_update']);
+
+              setState(() {
+                allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
+                allTrends[trend.patientId]!.add(trend);
+                DateTime actualTime = DateTime.parse(trend.start);
+                allTrends[trend.patientId]?.removeWhere((t) {
+                  DateTime startTime = DateTime.parse(t.start);
+                  return actualTime.difference(startTime).inMinutes > 5;
+                });
+              });
+            } else if (data['type'] == 'ai_token') {
+              final int pid = data['patient_id'];
+              final String token = data['text'] ?? '';
+              setState(() {
+                _aiStreams[pid] ??= StringBuffer();
+                _aiStreams[pid]!.write(token);
+                _aiStreaming = true;
+              });
+            } else if (data['type'] == 'ai_mex') {
+              final int pid = data['patient_id'];
+              final String full = data['text'] ?? '';
+              setState(() {
+                _aiResponses[pid] = full;
+                _aiStreams[pid]?.clear();
+                _aiStreaming = false;
+              });
+            }
           } catch (e) {
             debugPrint("Parsing error: $e");
           }
@@ -529,6 +574,314 @@ class _LivestreamPageState extends State<LivestreamPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
+      body: Stack(
+        children: [
+          // Layout principale che si restringe quando il pannello AI è aperto
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            padding: EdgeInsets.only(right: _showAiPanel ? 360 : 0),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  // --- RIGA SUPERIORE (Quadrante 1 e 2) ---
+                  Expanded(
+                    flex: 5,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 1° Quadrante: Classificazione Live (Sinistra)
+                        Expanded(
+                          flex: 1,
+                          child: buildGlassPanel(child: _buildStreamPanel()),
+                        ),
+                        const SizedBox(width: 16),
+
+                        // 2° Quadrante: Dettagli, Gauge e Badge (Destra)
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            children: [
+                              // Sotto-riga 1: Quick Status & Emodynamic Status
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: buildGlassPanel(
+                                        child: Column(
+                                          children: [
+                                            const Text(
+                                              "QUICK STATUS",
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 10,
+                                                letterSpacing: 1.2,
+                                              ),
+                                            ),
+                                            const Divider(
+                                              color: Colors.white10,
+                                            ),
+                                            Expanded(
+                                              child:
+                                                  selectedPatientId != null &&
+                                                      allTrends[selectedPatientId]
+                                                              ?.isNotEmpty ==
+                                                          true
+                                                  ? CircularSummaryPanel(
+                                                      trend:
+                                                          allTrends[selectedPatientId]!
+                                                              .last,
+                                                    )
+                                                  : _buildSimplePlaceholder(
+                                                      "Seleziona paziente",
+                                                    ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: buildGlassPanel(
+                                        child: Column(
+                                          children: [
+                                            const Text(
+                                              "EMODYNAMIC STATUS",
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 10,
+                                                letterSpacing: 1.2,
+                                              ),
+                                            ),
+                                            const Divider(
+                                              color: Colors.white10,
+                                            ),
+                                            selectedPatientId != null
+                                                ? Expanded(
+                                                    child: SingleChildScrollView(
+                                                      physics:
+                                                          const BouncingScrollPhysics(),
+                                                      child: ClinicalRadarChart(
+                                                        radarData: [
+                                                          addRiskCategory(),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  )
+                                                : _buildSimplePlaceholder(
+                                                    "Seleziona paziente",
+                                                  ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              // Sotto-riga 2: Trend Insights & Risk Indicators
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: buildGlassPanel(
+                                        child: Column(
+                                          children: [
+                                            const Text(
+                                              "TREND INSIGHTS",
+                                              style: TextStyle(
+                                                color: Colors.white54,
+                                                fontSize: 10,
+                                                letterSpacing: 1.2,
+                                              ),
+                                            ),
+                                            const Divider(
+                                              color: Colors.white10,
+                                            ),
+                                            Expanded(
+                                              child: SingleChildScrollView(
+                                                physics:
+                                                    const BouncingScrollPhysics(),
+                                                child: FeaturePanel(
+                                                  insights:
+                                                      (selectedPatientId !=
+                                                              null &&
+                                                          allTrends[selectedPatientId]
+                                                                  ?.isNotEmpty ==
+                                                              true)
+                                                      ? getFeatureInsights(
+                                                          allTrends[selectedPatientId]!
+                                                              .last,
+                                                        )
+                                                      : [],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: _buildRiskBadgesPanel({
+                                        "hemo_deterioration":
+                                            selectedPatientId == null
+                                            ? false
+                                            : allPatients[selectedPatientId]
+                                                  ?.pattern
+                                                  .hemoDeterioration,
+                                        "resp_failure":
+                                            selectedPatientId == null
+                                            ? false
+                                            : allPatients[selectedPatientId]
+                                                  ?.pattern
+                                                  .progRespFailure,
+                                        "dynamic_sepsis":
+                                            selectedPatientId == null
+                                            ? false
+                                            : allPatients[selectedPatientId]
+                                                  ?.pattern
+                                                  .dynamicSepsis,
+                                      }),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // --- RIGA INFERIORE (Quadrante 3 e 4) ---
+                  Expanded(
+                    flex: 4,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 3° Quadrante: Lista Triage (Sinistra)
+                        Expanded(
+                          flex: 1,
+                          child: buildGlassPanel(
+                            child: TriageMasterView(
+                              allPatients: allPatients.map(
+                                (key, value) =>
+                                    MapEntry(key, value.sensorUpdate),
+                              ),
+                              selectedPatientId: selectedPatientId,
+                              onPatientSelected: (p) => setState(
+                                () => selectedPatientId = p.patientId,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        // 4° Quadrante: Grafico + bottone Explain with AI
+                        Expanded(
+                          flex: 1,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: _buildChart()),
+                              if (selectedPatientId != null) ...[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => _requestAiExplanation(
+                                      selectedPatientId!,
+                                    ),
+                                    icon: const Icon(
+                                      Icons.auto_awesome,
+                                      size: 14,
+                                    ),
+                                    label: const Text("Explain with AI"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(
+                                        0xFF7F77DD,
+                                      ).withOpacity(0.15),
+                                      foregroundColor: const Color(0xFFAFA9EC),
+                                      side: const BorderSide(
+                                        color: Color(0xFF7F77DD),
+                                        width: 0.8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Pannello AI in slide da destra
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut,
+            top: 0,
+            right: _showAiPanel ? 0 : -360,
+            bottom: 0,
+            child: selectedPatientId != null
+                ? AiExplanationPanel(
+                    patientId: selectedPatientId!,
+                    streamingText:
+                        _aiStreams[selectedPatientId]?.toString() ?? '',
+                    completedText: _aiResponses[selectedPatientId],
+                    isStreaming: _aiStreaming,
+                    onClose: () => setState(() => _showAiPanel = false),
+                    onRegenerate: () =>
+                        _requestAiExplanation(selectedPatientId!),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper per i placeholder quando non c'è selezione
+  Widget _buildSimplePlaceholder(String text) {
+    return Center(
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white10,
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+    );
+  }
+}
+
+/*
+@override
+  Widget build(BuildContext context) {
+    return Scaffold(
       backgroundColor: const Color(
         0xFF121212,
       ), // Sfondo ancora più scuro per far risaltare i neon
@@ -738,17 +1091,4 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
-  // Helper per i placeholder quando non c'è selezione
-  Widget _buildSimplePlaceholder(String text) {
-    return Center(
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white10,
-          fontSize: 12,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-    );
-  }
-}
+*/
