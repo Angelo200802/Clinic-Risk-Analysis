@@ -15,7 +15,6 @@ import 'types/pattern.dart';
 import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
 import 'widget/circularsummary.dart';
-import 'evaluation.dart';
 
 const dynamic payload = {
   'sensor_update': {
@@ -306,6 +305,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
     super.initState();
     debugPrint("Inizializzazione LivestreamPage...");
     _connect();
+    /*
     allPatients[payload['sensor_update']['Patient ID']] = Record(
       sensorUpdate: SensorUpdate.fromJson(payload['sensor_update']),
       index: CalculatedIndex.fromJson(payload['index']),
@@ -313,7 +313,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
     allTrends[payload['trend_update']['Patient ID']] = [
       Trend.fromJson(payload['trend_update']),
-    ];
+    ];*/
   }
 
   @override

@@ -1,7 +1,7 @@
 from requests import get as http_get, post as http_post, Response
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from threading import Thread
 from datetime import datetime
 import time, os, dotenv, json, asyncio, logging, random
@@ -15,25 +15,25 @@ URL_POST = os.getenv("STREAM_POST")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_MODEL = os.getenv("GEMINI_API_MODEL")
 PROMPT = """
-### RUOLO
+## RUOLO
 Sei un generatore deterministico di dati sintetici per monitoraggio biomedicale. Simuli un sistema di telemetria ospedaliera ad alta fedeltà. Il tuo compito è far evolvere i segnali vitali ricevuti in input in modo fisiologicamente coerente, simulando il passare di un breve intervallo temporale (es. 10-15 secondi).
 
-### REGOLE DI GENERAZIONE
+## REGOLE DI GENERAZIONE
 1. **Realismo Fisiologico**: Le variazioni tra l'input e l'output devono essere plausibili (non generare salti improvvisi di frequenza cardiaca o saturazione a meno che non ci sia un trend di crisi in corso).
 2. **Coerenza Incrociata**: Se la frequenza respiratoria aumenta drasticamente, la frequenza cardiaca dovrebbe tendere a seguirla (riflesso autonomico).
 3. **Rumore del Sensore**: Includi micro-fluttuazioni realistiche tipiche dei sensori reali.
 
-### VINCOLI DI OUTPUT (STRETTI)
+## VINCOLI DI OUTPUT (STRETTI)
 - Rispondi **ESCLUSIVAMENTE** con un oggetto JSON valido.
 - Non includere introduzioni ("Ecco il tuo JSON...").
 - Non includere spiegazioni o considerazioni post-generazione.
 - Non aggiungere markdown decorativo (no blocchi di codice ```json) a meno che non sia strettamente richiesto dal parser.
 - Mantieni esattamente le stesse chiavi ricevute nel JSON di input.
 
-### INPUT ATTUALE
+## INPUT ATTUALE
 {vital_data}
 
-### OUTPUT ATTESO
+## OUTPUT ATTESO
 Restituire solo il JSON aggiornato
 """
 
@@ -55,17 +55,17 @@ def ask_llm(raw) -> dict:
     model = ChatGoogleGenerativeAI(model=GEMINI_API_MODEL, temperature=0.7)
     
     prompt = ChatPromptTemplate.from_template(PROMPT)
-    chain = prompt | model | StrOutputParser()
+    chain = prompt | model | JsonOutputParser()
     
     try :
-        raise Exception("Testing exception handling")  # Remove or comment this line in production
-        response = json.loads(chain.invoke({"vital_data": json.dumps(raw)}))
+        error = ""
+        response = chain.invoke({"vital_data": json.dumps(raw)})
     except Exception as e:
+        error = str(e)
         response = raw  
     logging.info(f"--- BATCH GENERATED ---")
-    logging.info(f"Out: \n{response}")
+    logging.info(f"Out ({error}): \n{response}")
     response['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-    response['Heart Rate'] = response['Heart Rate'] + random.randint(-2, 2) if 'Heart Rate' in response else None
     return response
 
 async def generate_streaming_data():

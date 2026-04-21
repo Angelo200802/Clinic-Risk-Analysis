@@ -1,9 +1,10 @@
-from pyspark.sql.types import StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+from pyspark.sql.types import Row, StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
 from pyspark.sql import Window
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col, window
 from redis import Redis
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from spark_manager import load_dataset, get_session
 import os, logging
 from pyspark.sql import DataFrame
@@ -11,10 +12,12 @@ from model.ensemble import Ensemble
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv 
 from fastapi import WebSocket
-import bus
+import bus, json
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
+GEMINI_API_MODEL = os.getenv("GEMINI_API_MODEL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 redis_db = Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT")), db=0)
 ensemble = Ensemble()
@@ -105,6 +108,57 @@ def batch_job(df_batch : DataFrame, batch_id):
             logging.error(f"Errore nel processamento del batch: {e}")
     
     df_batch.unpersist()
+
+def save_to_redis(row : dict):
+    patient_id = row['sensor_update']['Patient ID']
+    history_key = f"patient_history:{patient_id}"
+    logging.info(f"Salvando dati per Patient ID {patient_id} su Redis...")
+    payload = json.dumps(row,default=str)
+    pipe = redis_db.pipeline()
+    pipe.rpush(history_key, payload)
+    pipe.ltrim(history_key, 0, 10)
+    pipe.execute()
+    logging.info(f"Dati salvati per Patient ID {patient_id} su Redis.")
+
+def send_update(update_row: Row):
+    dict_row = update_row.asDict()
+    dict_row['start'] = dict_row['window'].start.isoformat()
+    dict_row['end'] = dict_row['window'].end.isoformat()    
+    dict_row.pop('window')
+    dict_row['Timestamp'] = dict_row.pop('Timestamp').isoformat() if dict_row['Timestamp'] else ""
+    update_row = {
+                "sensor_update" : {
+                    k : v for k, v in dict_row.items() if k in columns
+                },
+                "trend_update" : {
+                    k : v for k, v in dict_row.items() 
+                    if k not in columns 
+                    and 'prev' not in k 
+                    and 'index' not in k
+                    and 'pattern' not in k
+                    and 'deteriotation' not in k
+                    and 'rate_pp' not in k
+                    and 'delta' not in k
+                } ,
+                "index" : {
+                    k : v for k, v in dict_row.items() 
+                    if 'index' in k 
+                    or 'rate_pp' in k
+                } ,
+                "pattern" :{
+                    k : v for k, v in dict_row.items() 
+                    if 'pattern' in k or 'deterioration' in k
+                }
+            }
+    update_row['sensor_update']['Patient ID'] = dict_row['Patient ID']
+    update_row['sensor_update']['Timestamp'] = dict_row['Timestamp']
+    bus.main_loop.call_soon_threadsafe(
+        bus.data_queue.put_nowait, 
+        update_row
+    )
+    logging.info(f"Trend calcolato per Patient ID {update_row['sensor_update']['Patient ID']}\n {update_row}")
+    return update_row
+
 
 def batch_job_stats(df_stats : DataFrame, batch_id): 
     df_stats.show()
@@ -239,43 +293,8 @@ def batch_job_stats(df_stats : DataFrame, batch_id):
         )
 
         for row in df_with_trend.collect():
-            dict_row = row.asDict()
-            dict_row['start'] = dict_row['window'].start.isoformat()
-            dict_row['end'] = dict_row['window'].end.isoformat()    
-            dict_row.pop('window')
-            dict_row['Timestamp'] = dict_row.pop('Timestamp').isoformat() if dict_row['Timestamp'] else ""
-            update = {
-                    "sensor_update" : {
-                        k : v for k, v in dict_row.items() if k in columns
-                    },
-                    "trend_update" : {
-                        k : v for k, v in dict_row.items() 
-                        if k not in columns 
-                        and 'prev' not in k 
-                        and 'index' not in k
-                        and 'pattern' not in k
-                        and 'deteriotation' not in k
-                        and 'rate_pp' not in k
-                        and 'delta' not in k
-                    } ,
-                    "index" : {
-                        k : v for k, v in dict_row.items() 
-                        if 'index' in k 
-                        or 'rate_pp' in k
-                    } ,
-                    "pattern" :{
-                        k : v for k, v in dict_row.items() 
-                        if 'pattern' in k or 'deterioration' in k
-                    }
-                }
-            update['sensor_update']['Patient ID'] = dict_row['Patient ID']
-            update['sensor_update']['Timestamp'] = dict_row['Timestamp']
-            bus.main_loop.call_soon_threadsafe(
-                bus.data_queue.put_nowait, 
-                update
-            )
-            logging.info(f"Trend calcolato per Patient ID {row['Patient ID']}\n {update}")
-
+            updated_row = send_update(row)
+            save_to_redis(updated_row)
         logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
 
 def start_streaming():
@@ -370,3 +389,87 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json(data)
     except Exception as e:
         logging.info("WebSocket connection closed.")
+
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+def ask_llm(prompt:str) -> str:
+    model = ChatGoogleGenerativeAI(
+        model=GEMINI_API_MODEL, 
+        temperature=0.7,
+        api_key=GEMINI_API_KEY
+    )
+    
+    prompt = ChatPromptTemplate.from_template(prompt)
+    chain = prompt | model | StrOutputParser()
+
+    return chain.invoke({})
+
+async def run_llm_inference(patient_id, history):
+    current = history[0]
+    
+    prompt = f"""
+    ##RUOLO
+    Sei un Assistente Avanzato di Supporto alle Decisioni Cliniche (CDSS) specializzato in monitoraggio emodinamico e terapia intensiva.
+
+    ##SCOPO
+    Analizzare lo stato attuale del paziente e i trend calcolati per spiegare la classificazione di rischio e guidare il medico nell'identificare precocemente un deterioramento clinico.
+    
+    ## CONTESTO CLINICO
+    Paziente ID: {patient_id} | Genere: {current['sensor_update']['Gender']} | Età: {current['sensor_update']['Age']} | BMI: {current['sensor_update']['Derived_BMI']:.1f} ({current['trend_update']['bmi_class']})
+
+    ## DATI ATTUALI E TREND (Ultima finestra di osservazione)
+    - Stato Rischio: {current['sensor_update']['Prediction'] }
+    - Frequenza Cardiaca: {current['sensor_update']['Heart Rate']} bpm (Variazione: {current['trend_update']['hr_pct']}%)
+    - Pressione: {current['sensor_update']['Systolic Blood Pressure']}/{current['sensor_update']['Diastolic Blood Pressure']} mmHg (MAP: {current['trend_update']['map_pct']}% variazione)
+    - Saturazione Ossigeno: {current['sensor_update']['Oxygen Saturation']}%
+    - Shock Index: {current['index']['shock_index']:.2f} (Valore normale: 0.5-0.7)
+
+    ## ISTRUZIONI DI ANALISI
+    1. SPIEGAZIONE: Analizza la coerenza tra i pattern rilevati e i segni vitali. Perché il rischio è {current['sensor_update']['Prediction']}?
+    2. CRITICITÀ: Identifica il parametro che richiede attenzione immediata (es. Shock Index elevato o calo della MAP).
+    3. AZIONE: Suggerisci 2-3 step clinici basati su protocolli standard (es. ACLS, SIRS).
+
+    ## REGOLE DI OUTPUT (FORMATTAZIONE)
+    - Sii estremamente conciso (max 100 parole).
+    - Usa un tono professionale e analitico.
+    - Usa il formato markdown per evidenziare i parametri e le parole chiave (es. **Shock Index: 1.2**).
+    - Struttura la risposta in tre brevi paragrafi: **Analisi**, **Punto Critico**, **Suggerimenti**.
+        
+    """
+    
+    ai_response = ask_llm(prompt)
+    
+    logging.info(f"#####Risposta LLM per Patient ID {patient_id}:\n{ai_response}")
+
+    for ai_char in ai_response:
+        bus.main_loop.call_soon_threadsafe(
+            bus.data_queue.put_nowait, 
+            {
+                "type": "ai_token",
+                "patient_id": patient_id,
+                "text": ai_char
+            }
+        )
+    
+    bus.main_loop.call_soon_threadsafe(
+            bus.data_queue.put_nowait, 
+            {
+                "type": "ai_mex",
+                "patient_id": patient_id,
+                "text": ai_response 
+            }
+        )
+
+@router_streaming.post("/explain/{patient_id}")
+async def get_ai_explanation(patient_id: int, background_tasks: BackgroundTasks):
+    history_raw = redis_db.lrange(f"patient_history:{patient_id}", 0, -1)
+    
+    if not history_raw:
+        return {"status": "error", "message": "Dati non trovati per questo paziente"}
+
+    history = [json.loads(h) for h in history_raw]
+    background_tasks.add_task(run_llm_inference, patient_id, history)
+    
+    return {"status": "ok", "message": "Analisi AI avviata..."}
