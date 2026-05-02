@@ -384,14 +384,24 @@ def new_raw(raw: VitalSigns):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     logging.info("WebSocket connection accepted.")
+    
+    while not bus.data_queue.empty():
+        bus.data_queue.get_nowait()
+    
     try:
         while True:
             data = await bus.data_queue.get()
+            logging.info(f"Sending to WebSocket: type={data.get('type')}, pid={data.get('patient_id')}")
             await websocket.send_json(data)
+            logging.info(f"Sent OK: type={data.get('type')}")
     except Exception as e:
         logging.info("WebSocket connection closed.")
+    finally:
+        logging.info("WebSocket finally — svuoto queue")
+        while not bus.data_queue.empty():
+            bus.data_queue.get_nowait()
 
-
+import asyncio
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -440,30 +450,24 @@ async def run_llm_inference(patient_id, history):
         
     """
     
+    #loop = asyncio.get_running_loop()
     ai_response = ask_llm(prompt)
     
-    logging.info(f"#####Risposta LLM per Patient ID {patient_id}:\n{ai_response}")
-
-    for ai_char in ai_response:
-        bus.main_loop.call_soon_threadsafe(
-            bus.data_queue.put_nowait, 
-            {
-                "type": "ai_token",
-                "patient_id": patient_id,
-                "text": ai_char
-            }
-        )
+    logging.info(f"LLM response ready, length: {len(ai_response)}")
+    logging.info(f"Queue size before publish: {bus.data_queue.qsize()}")
+    logging.info(f"Queue empty: {bus.data_queue.empty()}")
     
-    bus.main_loop.call_soon_threadsafe(
-            bus.data_queue.put_nowait, 
-            {
-                "type": "ai_mex",
-                "patient_id": patient_id,
-                "text": ai_response 
-            }
-        )
+    return ai_response
+    #bus.main_loop.call_soon_threadsafe(
+    #        bus.data_queue.put_nowait, 
+    #        {
+    #            "type": "ai_mex",
+    #            "patient_id": patient_id,
+    #            "text": ai_response 
+    #        }
+    #    )
 
-@router_streaming.post("/explain/{patient_id}")
+@router_streaming.get("/explain/{patient_id}")
 async def get_ai_explanation(patient_id: int, background_tasks: BackgroundTasks):
     history_raw = redis_db.lrange(f"patient_history:{patient_id}", 0, -1)
     
@@ -471,6 +475,6 @@ async def get_ai_explanation(patient_id: int, background_tasks: BackgroundTasks)
         return {"status": "error", "message": "Dati non trovati per questo paziente"}
 
     history = [json.loads(h) for h in history_raw]
-    background_tasks.add_task(run_llm_inference, patient_id, history)
+    ai_response = await run_llm_inference(patient_id, history)
     
-    return {"status": "ok", "message": "Analisi AI avviata..."}
+    return {"status": "ok", "message": ai_response, "patient_id": patient_id}

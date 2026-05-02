@@ -1,5 +1,6 @@
 // Crea widget/ai_explanation_panel.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 
 class AiExplanationPanel extends StatefulWidget {
   final int patientId;
@@ -129,20 +130,95 @@ class _AiExplanationPanelState extends State<AiExplanationPanel> {
                 child: SingleChildScrollView(
                   controller: _scrollCtrl,
                   physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          _displayText,
-                          style: const TextStyle(
+                      MarkdownBody(
+                        data: _displayText,
+                        styleSheet: MarkdownStyleSheet(
+                          p: const TextStyle(
                             color: Colors.white70,
                             fontSize: 13,
                             height: 1.7,
                           ),
+                          h1: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5,
+                          ),
+                          h2: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5,
+                          ),
+                          h3: const TextStyle(
+                            color: Color(0xFFAFA9EC),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5,
+                          ),
+                          strong: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          em: const TextStyle(
+                            color: Colors.white60,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          code: const TextStyle(
+                            color: Color(0xFFAFA9EC),
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                            backgroundColor: Color(0xFF2A2A2A),
+                          ),
+                          codeblockDecoration: BoxDecoration(
+                            color: const Color(0xFF2A2A2A),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white10),
+                          ),
+                          blockquote: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          blockquoteDecoration: const BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Color(0xFF7F77DD),
+                                width: 3,
+                              ),
+                            ),
+                          ),
+                          listBullet: const TextStyle(
+                            color: Color(0xFFAFA9EC),
+                            fontSize: 13,
+                          ),
+                          horizontalRuleDecoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: Colors.white10, width: 1),
+                            ),
+                          ),
+                          tableHead: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          tableBody: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
+                          tableBorder: TableBorder.all(
+                            color: Colors.white10,
+                            width: 0.5,
+                          ),
                         ),
                       ),
-                      if (widget.isStreaming) const _BlinkingCursor(),
+                      if (widget.isStreaming) ...[
+                        const SizedBox(height: 4),
+                        const _BlinkingCursor(),
+                      ],
                     ],
                   ),
                 ),

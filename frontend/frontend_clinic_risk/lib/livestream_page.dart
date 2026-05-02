@@ -219,26 +219,16 @@ class _LivestreamPageState extends State<LivestreamPage> {
   final Map<int, StringBuffer> _aiStreams = {}; // buffer per paziente
   final Map<int, String> _aiResponses = {}; // risposta completa finale
   bool _aiStreaming = false;
+  Timer? _aiTypingTimer;
+  int _aiTypingIndex = 0;
+  String _aiFullText = '';
 
-  Future<void> _requestAiExplanation(int patientId) async {
-    setState(() {
-      _showAiPanel = true;
-      _aiStreaming = true;
-      _aiStreams[patientId] = StringBuffer(); // reset buffer
-    });
-
-    try {
-      final uri = Uri.parse(
-        '${dotenv.env['BACKEND_BASE_API']!}?patient_id=$patientId',
-      );
-      final response = await http.get(uri);
-      if (response.statusCode != 200) {
-        debugPrint('Explain endpoint error: ${response.statusCode}');
-      }
-    } catch (e) {
-      debugPrint('Explain request failed: $e');
-      setState(() => _aiStreaming = false);
-    }
+  Future<Map<String, dynamic>> _requestAiExplanation(int patientId) async {
+    final uri = Uri.parse(
+      'http://clinic-risk-analysis-app-1:8081/explain/$patientId',
+    );
+    final response = await http.get(uri);
+    return jsonDecode(response.body);
   }
 
   void _connect() async {
@@ -266,6 +256,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
         (message) {
           try {
             final data = jsonDecode(message);
+            debugPrint("Tipo messaggio: ${data['type']}");
             if (data['type'] == 'update') {
               SensorUpdate sensorUpdate = SensorUpdate.fromJson(
                 data['sensor_update'],
@@ -281,7 +272,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
                 _lastUpdate = sensorUpdate;
               });
 
-              debugPrint("Ricevuto trend per patient ${data['trend_update']}}");
               Trend trend = Trend.fromJson(data['trend_update']);
 
               setState(() {
@@ -293,22 +283,42 @@ class _LivestreamPageState extends State<LivestreamPage> {
                   return actualTime.difference(startTime).inMinutes > 5;
                 });
               });
-            } else if (data['type'] == 'ai_token') {
-              final int pid = data['patient_id'];
-              final String token = data['text'] ?? '';
-              setState(() {
-                _aiStreams[pid] ??= StringBuffer();
-                _aiStreams[pid]!.write(token);
-                _aiStreaming = true;
-              });
             } else if (data['type'] == 'ai_mex') {
               final int pid = data['patient_id'];
               final String full = data['text'] ?? '';
+
+              // Cancella eventuale animazione precedente
+              _aiTypingTimer?.cancel();
+              _aiTypingIndex = 0;
+              _aiFullText = full;
+
               setState(() {
-                _aiResponses[pid] = full;
-                _aiStreams[pid]?.clear();
-                _aiStreaming = false;
+                _aiStreams[pid] = StringBuffer();
+                _aiResponses.remove(pid);
+                _aiStreaming = true;
+                _showAiPanel = true;
               });
+
+              // Simula typing locale
+              _aiTypingTimer = Timer.periodic(
+                const Duration(milliseconds: 15),
+                (_) {
+                  if (_aiTypingIndex < _aiFullText.length) {
+                    setState(() {
+                      _aiStreams[pid]!.write(_aiFullText[_aiTypingIndex]);
+                      _aiTypingIndex++;
+                    });
+                  } else {
+                    _aiTypingTimer?.cancel();
+                    _aiTypingTimer = null;
+                    setState(() {
+                      _aiResponses[pid] = _aiFullText;
+                      _aiStreams[pid]?.clear();
+                      _aiStreaming = false;
+                    });
+                  }
+                },
+              );
             }
           } catch (e) {
             debugPrint("Parsing error: $e");
@@ -363,6 +373,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   @override
   void dispose() {
+    _aiTypingTimer?.cancel();
     _subscription?.cancel();
     _channel.sink.close();
     _reconnectTimer?.cancel();
@@ -799,9 +810,50 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                     horizontal: 12,
                                   ),
                                   child: ElevatedButton.icon(
-                                    onPressed: () => _requestAiExplanation(
-                                      selectedPatientId!,
-                                    ),
+                                    onPressed: () async {
+                                      setState(() {
+                                        _aiStreaming = true;
+                                        _showAiPanel = true;
+                                      });
+
+                                      final data = await _requestAiExplanation(
+                                        selectedPatientId!,
+                                      );
+                                      final int pid = data['patient_id'];
+                                      final String full = data['message'] ?? '';
+
+                                      _aiTypingTimer?.cancel();
+                                      _aiTypingIndex = 0;
+                                      _aiFullText = full;
+
+                                      setState(() {
+                                        _aiStreams[pid] = StringBuffer();
+                                        _aiResponses.remove(pid);
+                                      });
+
+                                      _aiTypingTimer = Timer.periodic(
+                                        const Duration(milliseconds: 15),
+                                        (_) {
+                                          if (_aiTypingIndex <
+                                              _aiFullText.length) {
+                                            setState(() {
+                                              _aiStreams[pid]!.write(
+                                                _aiFullText[_aiTypingIndex],
+                                              );
+                                              _aiTypingIndex++;
+                                            });
+                                          } else {
+                                            _aiTypingTimer?.cancel();
+                                            _aiTypingTimer = null;
+                                            setState(() {
+                                              _aiResponses[pid] = _aiFullText;
+                                              _aiStreams[pid]?.clear();
+                                              _aiStreaming = false;
+                                            });
+                                          }
+                                        },
+                                      );
+                                    },
                                     icon: const Icon(
                                       Icons.auto_awesome,
                                       size: 14,
