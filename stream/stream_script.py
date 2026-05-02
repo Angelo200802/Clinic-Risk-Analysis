@@ -14,29 +14,26 @@ URL_GET = os.getenv("STREAM_GET")
 URL_POST = os.getenv("STREAM_POST")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_MODEL = os.getenv("GEMINI_API_MODEL")
-PROMPT = """
 ## RUOLO
-Sei un generatore deterministico di dati sintetici per monitoraggio biomedicale. Simuli un sistema di telemetria ospedaliera ad alta fedeltà. Il tuo compito è far evolvere i segnali vitali ricevuti in input in modo fisiologicamente coerente, simulando il passare di un breve intervallo temporale (es. 10-15 secondi).
+PROMPT = """Sei un generatore di dati sintetici stocastico per monitoraggio biomedicale. Il tuo compito è far evolvere i segnali vitali ricevuti in input applicando fluttuazioni casuali e bidirezionali (positive o negative) per simulare l'instabilità naturale dei parametri.
 
 ## REGOLE DI GENERAZIONE
-1. **Realismo Fisiologico**: Le variazioni tra l'input e l'output devono essere plausibili (non generare salti improvvisi di frequenza cardiaca o saturazione a meno che non ci sia un trend di crisi in corso).
-2. **Coerenza Incrociata**: Se la frequenza respiratoria aumenta drasticamente, la frequenza cardiaca dovrebbe tendere a seguirla (riflesso autonomico).
-3. **Rumore del Sensore**: Includi micro-fluttuazioni realistiche tipiche dei sensori reali.
+1. **Variazione Casuale e Bidirezionale**: Per ogni parametro di input, l'algoritmo deve scegliere casualmente se il valore deve **salire o scendere**. Non deve esserci un trend unidirezionale; le statistiche devono poter diminuire tanto quanto aumentare.
+2. **Delta di Oscillazione**: Applica uno scostamento casuale (delta) compreso tra l'1% e il 5% del valore originale. Il segno (+ o -) di tale delta deve essere determinato in modo stocastico (lancio di moneta virtuale) per ogni singola chiave del JSON.
+3. **Indipendenza dei Parametri**: La variazione di un segnale non deve influenzare gli altri. Se la frequenza cardiaca sale, la pressione può scendere o restare stabile, senza alcuna coerenza clinica.
+4. **Limiti di Sicurezza**: Assicurati che i valori non diventino negativi e non superino i limiti fisiologici massimi (es. SpO2 max 100%).
 
 ## VINCOLI DI OUTPUT (STRETTI)
-- Rispondi **ESCLUSIVAMENTE** con un oggetto JSON valido.
-- Non includere introduzioni ("Ecco il tuo JSON...").
-- Non includere spiegazioni o considerazioni post-generazione.
-- Non aggiungere markdown decorativo (no blocchi di codice ```json) a meno che non sia strettamente richiesto dal parser.
+- Rispondi ESCLUSIVAMENTE con un oggetto JSON valido.
+- Non includere introduzioni, spiegazioni o blocchi di codice markdown.
 - Mantieni esattamente le stesse chiavi ricevute nel JSON di input.
 
 ## INPUT ATTUALE
 {vital_data}
 
 ## OUTPUT ATTESO
-Restituire solo il JSON aggiornato
+Restituire solo il JSON aggiornato con le variazioni casuali (positive o negative) applicate.
 """
-
 async def fetch_data():
     response:Response = http_get(URL_GET)
     
