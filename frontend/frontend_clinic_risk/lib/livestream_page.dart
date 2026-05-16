@@ -537,6 +537,42 @@ class _LivestreamPageState extends State<LivestreamPage> {
     );
   }
 
+  Widget _buildAiPanel() {
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      top: 0,
+      bottom: 0,
+      child: selectedPatientId != null
+          ? AiExplanationPanel(
+              patientId: selectedPatientId!,
+              streamingText: _aiStreams[selectedPatientId]?.toString() ?? '',
+              completedText: _aiResponses[selectedPatientId],
+              isStreaming: _aiStreaming,
+              onClose: () => setState(() => _showAiPanel = false),
+              onRegenerate: () => _requestAiExplanation(selectedPatientId!),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF151515),
+                borderRadius: BorderRadius.circular(
+                  12,
+                ), // Bordi arrotondati relativi
+              ),
+              child: Center(
+                child: Text(
+                  "Seleziona un paziente per visualizzare l'Explain con AI",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+    );
+  }
+
   // Widget per il piccolo badge pulsante con il valore attuale
   Widget _buildLiveBadge(num value) {
     Color col = chartAttributes
@@ -606,7 +642,89 @@ class _LivestreamPageState extends State<LivestreamPage> {
                         // 1° Quadrante: Classificazione Live (Sinistra)
                         Expanded(
                           flex: 1,
-                          child: buildGlassPanel(child: _buildStreamPanel()),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: buildGlassPanel(child: _buildAiPanel()),
+                              ),
+                              if (selectedPatientId != null) ...[
+                                const SizedBox(height: 8),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
+                                      setState(() {
+                                        _aiStreaming = true;
+                                        _showAiPanel = true;
+                                      });
+
+                                      final data = await _requestAiExplanation(
+                                        selectedPatientId!,
+                                      );
+                                      final int pid = data['patient_id'];
+                                      final String full = data['message'] ?? '';
+
+                                      _aiTypingTimer?.cancel();
+                                      _aiTypingIndex = 0;
+                                      _aiFullText = full;
+
+                                      setState(() {
+                                        _aiStreams[pid] = StringBuffer();
+                                        _aiResponses.remove(pid);
+                                      });
+
+                                      _aiTypingTimer = Timer.periodic(
+                                        const Duration(milliseconds: 15),
+                                        (_) {
+                                          if (_aiTypingIndex <
+                                              _aiFullText.length) {
+                                            setState(() {
+                                              _aiStreams[pid]!.write(
+                                                _aiFullText[_aiTypingIndex],
+                                              );
+                                              _aiTypingIndex++;
+                                            });
+                                          } else {
+                                            _aiTypingTimer?.cancel();
+                                            _aiTypingTimer = null;
+                                            setState(() {
+                                              _aiResponses[pid] = _aiFullText;
+                                              _aiStreams[pid]?.clear();
+                                              _aiStreaming = false;
+                                            });
+                                          }
+                                        },
+                                      );
+                                    },
+                                    icon: const Icon(
+                                      Icons.auto_awesome,
+                                      size: 14,
+                                    ),
+                                    label: const Text("Explain with AI"),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(
+                                        0xFF7F77DD,
+                                      ).withOpacity(0.15),
+                                      foregroundColor: const Color(0xFFAFA9EC),
+                                      side: const BorderSide(
+                                        color: Color(0xFF7F77DD),
+                                        width: 0.8,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
                         ),
                         const SizedBox(width: 16),
 
@@ -801,85 +919,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                           flex: 1,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(child: _buildChart()),
-                              if (selectedPatientId != null) ...[
-                                const SizedBox(height: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: ElevatedButton.icon(
-                                    onPressed: () async {
-                                      setState(() {
-                                        _aiStreaming = true;
-                                        _showAiPanel = true;
-                                      });
-
-                                      final data = await _requestAiExplanation(
-                                        selectedPatientId!,
-                                      );
-                                      final int pid = data['patient_id'];
-                                      final String full = data['message'] ?? '';
-
-                                      _aiTypingTimer?.cancel();
-                                      _aiTypingIndex = 0;
-                                      _aiFullText = full;
-
-                                      setState(() {
-                                        _aiStreams[pid] = StringBuffer();
-                                        _aiResponses.remove(pid);
-                                      });
-
-                                      _aiTypingTimer = Timer.periodic(
-                                        const Duration(milliseconds: 15),
-                                        (_) {
-                                          if (_aiTypingIndex <
-                                              _aiFullText.length) {
-                                            setState(() {
-                                              _aiStreams[pid]!.write(
-                                                _aiFullText[_aiTypingIndex],
-                                              );
-                                              _aiTypingIndex++;
-                                            });
-                                          } else {
-                                            _aiTypingTimer?.cancel();
-                                            _aiTypingTimer = null;
-                                            setState(() {
-                                              _aiResponses[pid] = _aiFullText;
-                                              _aiStreams[pid]?.clear();
-                                              _aiStreaming = false;
-                                            });
-                                          }
-                                        },
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.auto_awesome,
-                                      size: 14,
-                                    ),
-                                    label: const Text("Explain with AI"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(
-                                        0xFF7F77DD,
-                                      ).withOpacity(0.15),
-                                      foregroundColor: const Color(0xFFAFA9EC),
-                                      side: const BorderSide(
-                                        color: Color(0xFF7F77DD),
-                                        width: 0.8,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                            children: [Expanded(child: _buildChart())],
                           ),
                         ),
                       ],

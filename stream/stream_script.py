@@ -12,8 +12,10 @@ dotenv.load_dotenv()
 
 URL_GET = os.getenv("STREAM_GET")
 URL_POST = os.getenv("STREAM_POST")
+URL_REPORT = os.getenv("STREAM_REPORT")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_API_MODEL = os.getenv("GEMINI_API_MODEL")
+
 ## RUOLO
 PROMPT = """Sei un generatore di dati sintetici stocastico per monitoraggio biomedicale. Il tuo compito è far evolvere i segnali vitali ricevuti in input applicando fluttuazioni casuali e bidirezionali (positive o negative) per simulare l'instabilità naturale dei parametri.
 
@@ -31,11 +33,14 @@ PROMPT = """Sei un generatore di dati sintetici stocastico per monitoraggio biom
 ## INPUT ATTUALE
 {vital_data}
 
+##STORICO PAZIENTE
+{report}
+
 ## OUTPUT ATTESO
 Restituire solo il JSON aggiornato con le variazioni casuali (positive o negative) applicate.
 """
-async def fetch_data():
-    response:Response = http_get(URL_GET)
+async def fetch_data(url) -> dict:
+    response:Response = http_get(url)
     
     if response.status_code != 200:
         raise Exception(f"Failed to fetch data: {response.status_code}")
@@ -48,7 +53,7 @@ def post_data(data):
     if response.status_code != 200:
         raise Exception(f"Failed to post data: {response.status_code}")
     
-def ask_llm(raw) -> dict:
+def ask_llm(raw,report) -> dict:
     model = ChatGoogleGenerativeAI(model=GEMINI_API_MODEL, temperature=0.7)
     
     prompt = ChatPromptTemplate.from_template(PROMPT)
@@ -56,7 +61,7 @@ def ask_llm(raw) -> dict:
     
     try :
         error = ""
-        response = chain.invoke({"vital_data": json.dumps(raw)})
+        response = chain.invoke({"vital_data": json.dumps(raw), "report": report})
     except Exception as e:
         error = str(e)
         response = raw  
@@ -66,10 +71,11 @@ def ask_llm(raw) -> dict:
     return response
 
 async def generate_streaming_data():
-    next = await fetch_data()
+    next = await fetch_data(url=URL_GET)
 
     while True:
-        next = ask_llm(next)
+        report = await fetch_data(url=URL_REPORT+f"/{next['Patient ID']}")
+        next = ask_llm(next, report['history_report'] if 'history_report' in report else "No history available")
         try:
             post_data(next)
         except Exception as e:

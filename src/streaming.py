@@ -401,7 +401,6 @@ async def websocket_endpoint(websocket: WebSocket):
         while not bus.data_queue.empty():
             bus.data_queue.get_nowait()
 
-import asyncio
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -420,6 +419,22 @@ def ask_llm(prompt:str) -> str:
 async def run_llm_inference(patient_id, history):
     current = history[0]
     
+    # 1. Estrai e formatta i dati prima, così eviti query complesse nella f-string
+    gender = current['sensor_update']['Gender']
+    age = current['sensor_update']['Age']
+    bmi = current['sensor_update']['Derived_BMI']
+    bmi_class = current['trend_update']['bmi_class']
+    prediction = current['sensor_update']['Prediction']
+    hr = current['sensor_update']['Heart Rate']
+    hr_pct = current['trend_update']['hr_pct']
+    sbp = current['sensor_update']['Systolic Blood Pressure']
+    dbp = current['sensor_update']['Diastolic Blood Pressure']
+    map_pct = current['trend_update']['map_pct']
+    spo2 = current['sensor_update']['Oxygen Saturation']
+    shock_idx = current['index']['shock_index']
+    
+    patient_report = generate_report(history[1:-1], analysis=True)
+
     prompt = f"""
     ##RUOLO
     Sei un Assistente Avanzato di Supporto alle Decisioni Cliniche (CDSS) specializzato in monitoraggio emodinamico e terapia intensiva.
@@ -428,17 +443,20 @@ async def run_llm_inference(patient_id, history):
     Analizzare lo stato attuale del paziente e i trend calcolati per spiegare la classificazione di rischio e guidare il medico nell'identificare precocemente un deterioramento clinico.
     
     ## CONTESTO CLINICO
-    Paziente ID: {patient_id} | Genere: {current['sensor_update']['Gender']} | Età: {current['sensor_update']['Age']} | BMI: {current['sensor_update']['Derived_BMI']:.1f} ({current['trend_update']['bmi_class']})
+    Paziente ID: {patient_id} | Genere: {gender} | Età: {age} | BMI: {bmi:.1f} ({bmi_class})
 
     ## DATI ATTUALI E TREND (Ultima finestra di osservazione)
-    - Stato Rischio: {current['sensor_update']['Prediction'] }
-    - Frequenza Cardiaca: {current['sensor_update']['Heart Rate']} bpm (Variazione: {current['trend_update']['hr_pct']}%)
-    - Pressione: {current['sensor_update']['Systolic Blood Pressure']}/{current['sensor_update']['Diastolic Blood Pressure']} mmHg (MAP: {current['trend_update']['map_pct']}% variazione)
-    - Saturazione Ossigeno: {current['sensor_update']['Oxygen Saturation']}%
-    - Shock Index: {current['index']['shock_index']:.2f} (Valore normale: 0.5-0.7)
+    - Stato Rischio: {prediction}
+    - Frequenza Cardiaca: {hr} bpm (Variazione: {hr_pct}%)
+    - Pressione: {sbp}/{dbp} mmHg (MAP: {map_pct}% variazione)
+    - Saturazione Ossigeno: {spo2}%
+    - Shock Index: {shock_idx:.2f} (Valore normale: 0.5-0.7)
+
+    ## STORICO PAZIENTE
+    {patient_report}
 
     ## ISTRUZIONI DI ANALISI
-    1. SPIEGAZIONE: Analizza la coerenza tra i pattern rilevati e i segni vitali. Perché il rischio è {current['sensor_update']['Prediction']}?
+    1. SPIEGAZIONE: Analizza la coerenza tra i pattern rilevati e i segni vitali. Perché il rischio è {prediction}?
     2. CRITICITÀ: Identifica il parametro che richiede attenzione immediata (es. Shock Index elevato o calo della MAP).
     3. AZIONE: Suggerisci 2-3 step clinici basati su protocolli standard (es. ACLS, SIRS).
 
@@ -447,10 +465,8 @@ async def run_llm_inference(patient_id, history):
     - Usa un tono professionale e analitico.
     - Usa il formato markdown per evidenziare i parametri e le parole chiave (es. **Shock Index: 1.2**).
     - Struttura la risposta in tre brevi paragrafi: **Analisi**, **Punto Critico**, **Suggerimenti**.
-        
     """
     
-    #loop = asyncio.get_running_loop()
     ai_response = ask_llm(prompt)
     
     logging.info(f"LLM response ready, length: {len(ai_response)}")
@@ -458,17 +474,10 @@ async def run_llm_inference(patient_id, history):
     logging.info(f"Queue empty: {bus.data_queue.empty()}")
     
     return ai_response
-    #bus.main_loop.call_soon_threadsafe(
-    #        bus.data_queue.put_nowait, 
-    #        {
-    #            "type": "ai_mex",
-    #            "patient_id": patient_id,
-    #            "text": ai_response 
-    #        }
-    #    )
+    
 
 @router_streaming.get("/explain/{patient_id}")
-async def get_ai_explanation(patient_id: int, background_tasks: BackgroundTasks):
+async def get_ai_explanation(patient_id: int):
     history_raw = redis_db.lrange(f"patient_history:{patient_id}", 0, -1)
     
     if not history_raw:
@@ -478,3 +487,45 @@ async def get_ai_explanation(patient_id: int, background_tasks: BackgroundTasks)
     ai_response = await run_llm_inference(patient_id, history)
     
     return {"status": "ok", "message": ai_response, "patient_id": patient_id}
+
+def generate_report(history: list,analysis:bool = False) -> str:
+    report_steps = []
+    
+    for i, entry in enumerate(history[0:min(5,len(history))]):
+        s = entry["sensor_update"]
+        t = entry["trend_update"]
+        index = entry["index"]
+        
+        # 1. Sezione Sensori: Valori attuali e derivati calcolati
+        sensors_block = [
+            f"   [SENSORS] HR: {s['Heart Rate']} bpm, RR: {s['Respiratory Rate']} resp/min, SpO2: {s['Oxygen Saturation']}%",
+            f"   [PRESS.] SBP: {s['Systolic Blood Pressure']} mmHg, DBP: {s['Diastolic Blood Pressure']} mmHg",
+            f"   [DERIVED] MAP: {s.get('Derived_MAP', 0):.2f}, PP: {s.get('Derived_Pulse_Pressure', 0)}, HRV: {s.get('Derived_HRV', 0)}"
+        ]
+        if analysis:
+            # 2. Sezione Trend: Medie mobili e statistiche di rischio
+            trends_block = [
+                f"   [AVG_MOVING] Avg_HR: {t['avg_hr']}, Avg_SBP: {t['avg_sbp']}, Avg_DBP: {t['avg_dbp']} Avg_RR: {t['avg_rr']}, Avg_SpO2: {t['avg_spo2']}",
+                f"   [STATS] Risk_Ratio: {t['risk_ratio']}, Samples: {t['n_samples']}, Hemo_Deterioration: {t['progressive_hemo_deterioration']}"
+            ]
+            trends_block.append(f"   [INDEX] Shock Index: {index['shock_index']:.2f}, Modified Shock Index: {index['modified_shock_index']:.2f}, Age Index: {index['age_index']:.2f} Diastolic Shock Index: {index['diastolic_shock_index']:.2f}, PP Index: {index['pp_index']:.2f}")
+        
+        # Unione delle sezioni per il singolo step
+        step_header = f"STEP {i} | TIMESTAMP: {s['Timestamp']} | STATUS: {s['Prediction']}"
+        full_step = [step_header] + sensors_block + (trends_block if analysis else [])
+        
+        report_steps.append("\n".join(full_step))
+
+    # Join finale: separa ogni blocco temporale con una linea per massima chiarezza
+    divider = "\n" + "-"*50 + "\n"
+    return divider.join(report_steps)
+
+@router_streaming.get("/history_report/{patient_id}")
+async def get_patient_history_report(patient_id: int):
+    history_raw = redis_db.lrange(f"patient_history:{patient_id}", 0, -1)
+    
+    if not history_raw:
+        return {"status": "error", "message": "Dati non trovati per questo paziente"}
+
+    history = [json.loads(h) for h in history_raw]
+    return {"status": "ok", "history_report": generate_report(history), "patient_id": patient_id}
