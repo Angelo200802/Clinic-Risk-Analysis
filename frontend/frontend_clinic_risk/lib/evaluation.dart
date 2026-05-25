@@ -388,7 +388,7 @@ class _EvaluationPageState extends State<EvaluationPage> {
                                   children: [
                                     buildPanelHeader(
                                       Icons.show_chart,
-                                      "Analisi Curva ROC",
+                                      "Curva ROC del Modello vs Curva Roc dello Shock Index",
                                     ),
                                     const SizedBox(height: 20),
                                     RocCurveChart(

@@ -1,14 +1,11 @@
-// Crea widget/ai_explanation_panel.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 class AiExplanationPanel extends StatefulWidget {
-  final int patientId;
-  final String streamingText; // da _aiStreams[patientId]?.toString() ?? ''
-  final String? completedText; // da _aiResponses[patientId]
+  final int? patientId;
+  final String streamingText;
+  final String? completedText;
   final bool isStreaming;
-  final VoidCallback onClose;
-  final VoidCallback onRegenerate;
 
   const AiExplanationPanel({
     super.key,
@@ -16,8 +13,6 @@ class AiExplanationPanel extends StatefulWidget {
     required this.streamingText,
     required this.completedText,
     required this.isStreaming,
-    required this.onClose,
-    required this.onRegenerate,
   });
 
   @override
@@ -30,7 +25,6 @@ class _AiExplanationPanelState extends State<AiExplanationPanel> {
   @override
   void didUpdateWidget(AiExplanationPanel old) {
     super.didUpdateWidget(old);
-    // Auto-scroll durante lo streaming
     if (widget.streamingText != old.streamingText) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollCtrl.hasClients) {
@@ -56,233 +50,191 @@ class _AiExplanationPanelState extends State<AiExplanationPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 360,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
-        border: Border(left: BorderSide(color: Colors.white12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Row(
               children: [
-                const Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome,
-                      color: Color(0xFFAFA9EC),
-                      size: 14,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      "AI CLINICAL SUMMARY",
-                      style: TextStyle(
-                        color: Color(0xFFAFA9EC),
-                        fontSize: 10,
-                        letterSpacing: 1.4,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                IconButton(
-                  icon: const Icon(
-                    Icons.close,
-                    size: 16,
-                    color: Colors.white38,
+                Icon(Icons.auto_awesome, color: Color(0xFFAFA9EC), size: 14),
+                SizedBox(width: 8),
+                Text(
+                  "AI CLINICAL SUMMARY",
+                  style: TextStyle(
+                    color: Colors.white54,
+                    fontSize: 10,
+                    letterSpacing: 1.2,
                   ),
-                  onPressed: widget.onClose,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                 ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              "Patient #${widget.patientId}",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+            if (widget.isStreaming)
+              const _DotIndicator()
+            else if (widget.completedText != null)
+              const Icon(
+                Icons.check_circle_outline,
+                size: 14,
+                color: Colors.greenAccent,
               ),
-            ),
-          ),
-          const Divider(color: Colors.white10, height: 24),
+          ],
+        ),
+        const Divider(color: Colors.white10, height: 20),
 
-          // Testo in streaming
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: SingleChildScrollView(
-                  controller: _scrollCtrl,
-                  physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      MarkdownBody(
-                        data: _displayText,
-                        styleSheet: MarkdownStyleSheet(
-                          p: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                            height: 1.7,
-                          ),
-                          h1: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            height: 1.5,
-                          ),
-                          h2: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            height: 1.5,
-                          ),
-                          h3: const TextStyle(
-                            color: Color(0xFFAFA9EC),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            height: 1.5,
-                          ),
-                          strong: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          em: const TextStyle(
-                            color: Colors.white60,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          code: const TextStyle(
-                            color: Color(0xFFAFA9EC),
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            backgroundColor: Color(0xFF2A2A2A),
-                          ),
-                          codeblockDecoration: BoxDecoration(
-                            color: const Color(0xFF2A2A2A),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white10),
-                          ),
-                          blockquote: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 13,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          blockquoteDecoration: const BoxDecoration(
-                            border: Border(
-                              left: BorderSide(
-                                color: Color(0xFF7F77DD),
-                                width: 3,
-                              ),
-                            ),
-                          ),
-                          listBullet: const TextStyle(
-                            color: Color(0xFFAFA9EC),
-                            fontSize: 13,
-                          ),
-                          horizontalRuleDecoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white10, width: 1),
-                            ),
-                          ),
-                          tableHead: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                          tableBody: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                          tableBorder: TableBorder.all(
-                            color: Colors.white10,
-                            width: 0.5,
-                          ),
-                        ),
-                      ),
-                      if (widget.isStreaming) ...[
-                        const SizedBox(height: 4),
-                        const _BlinkingCursor(),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        // Contenuto
+        Expanded(
+          child: widget.patientId == null
+              ? _buildPlaceholder()
+              : _buildContent(),
+        ),
+      ],
+    );
+  }
 
-          // Footer
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: widget.isStreaming
-                ? const Row(
-                    children: [
-                      _DotIndicator(),
-                      SizedBox(width: 8),
-                      Text(
-                        "RECEIVING STREAM",
-                        style: TextStyle(
-                          color: Color(0xFF7F77DD),
-                          fontSize: 10,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      const Icon(
-                        Icons.check_circle_outline,
-                        size: 14,
-                        color: Colors.greenAccent,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        "Analysis complete",
-                        style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: widget.onRegenerate,
-                        child: const Text(
-                          "Regenerate",
-                          style: TextStyle(
-                            color: Color(0xFFAFA9EC),
-                            fontSize: 11,
-                            decoration: TextDecoration.underline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+  Widget _buildPlaceholder() {
+    return const Center(
+      child: Text(
+        "Seleziona paziente",
+        style: TextStyle(
+          color: Colors.white10,
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
       ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_displayText.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: 32,
+              color: Colors.white.withOpacity(0.05),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Premi il bottone per generare\nun'analisi AI del paziente",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.15),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: SingleChildScrollView(
+            controller: _scrollCtrl,
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                MarkdownBody(
+                  data: _displayText,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      height: 1.7,
+                    ),
+                    h1: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                    ),
+                    h2: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                    ),
+                    h3: const TextStyle(
+                      color: Color(0xFFAFA9EC),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.5,
+                    ),
+                    strong: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    em: const TextStyle(
+                      color: Colors.white60,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    code: const TextStyle(
+                      color: Color(0xFFAFA9EC),
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      backgroundColor: Color(0xFF2A2A2A),
+                    ),
+                    codeblockDecoration: BoxDecoration(
+                      color: const Color(0xFF2A2A2A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    blockquote: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    blockquoteDecoration: const BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: Color(0xFF7F77DD), width: 3),
+                      ),
+                    ),
+                    listBullet: const TextStyle(
+                      color: Color(0xFFAFA9EC),
+                      fontSize: 13,
+                    ),
+                    horizontalRuleDecoration: const BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Colors.white10, width: 1),
+                      ),
+                    ),
+                    tableHead: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                    tableBody: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                    tableBorder: TableBorder.all(
+                      color: Colors.white10,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+                if (widget.isStreaming) ...[
+                  const SizedBox(height: 4),
+                  const _BlinkingCursor(),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-// Cursore lampeggiante
 class _BlinkingCursor extends StatefulWidget {
   const _BlinkingCursor();
+
   @override
   State<_BlinkingCursor> createState() => _BlinkingCursorState();
 }
@@ -290,6 +242,7 @@ class _BlinkingCursor extends StatefulWidget {
 class _BlinkingCursorState extends State<_BlinkingCursor>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
+
   @override
   void initState() {
     super.initState();
@@ -317,9 +270,9 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
   );
 }
 
-// Tre pallini animati
 class _DotIndicator extends StatefulWidget {
   const _DotIndicator();
+
   @override
   State<_DotIndicator> createState() => _DotIndicatorState();
 }
@@ -327,6 +280,7 @@ class _DotIndicator extends StatefulWidget {
 class _DotIndicatorState extends State<_DotIndicator>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
+
   @override
   void initState() {
     super.initState();

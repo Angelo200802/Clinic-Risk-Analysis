@@ -538,38 +538,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   Widget _buildAiPanel() {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      top: 0,
-      bottom: 0,
-      child: selectedPatientId != null
-          ? AiExplanationPanel(
-              patientId: selectedPatientId!,
-              streamingText: _aiStreams[selectedPatientId]?.toString() ?? '',
-              completedText: _aiResponses[selectedPatientId],
-              isStreaming: _aiStreaming,
-              onClose: () => setState(() => _showAiPanel = false),
-              onRegenerate: () => _requestAiExplanation(selectedPatientId!),
-            )
-          : Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF151515),
-                borderRadius: BorderRadius.circular(
-                  12,
-                ), // Bordi arrotondati relativi
-              ),
-              child: Center(
-                child: Text(
-                  "Seleziona un paziente per visualizzare l'Explain con AI",
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.3),
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
+    return AiExplanationPanel(
+      patientId: selectedPatientId,
+      streamingText: _aiStreams[selectedPatientId]?.toString() ?? '',
+      completedText: _aiResponses[selectedPatientId],
+      isStreaming: _aiStreaming,
     );
   }
 
@@ -622,304 +595,241 @@ class _LivestreamPageState extends State<LivestreamPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
-      body: Stack(
-        children: [
-          // Layout principale che si restringe quando il pannello AI è aperto
-          AnimatedPadding(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            padding: EdgeInsets.only(right: _showAiPanel ? 360 : 0),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            // --- RIGA SUPERIORE (Quadrante 1 e 2) ---
+            Expanded(
+              flex: 5,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // --- RIGA SUPERIORE (Quadrante 1 e 2) ---
+                  // 1° Quadrante: Classificazione Live / AI Panel (Sinistra)
                   Expanded(
-                    flex: 5,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    flex: 1,
+                    child: Column(
                       children: [
-                        // 1° Quadrante: Classificazione Live (Sinistra)
+                        // Rende il pannello flessibile così riempie lo spazio sopra il bottone
                         Expanded(
-                          flex: 1,
-                          child: Column(
-                            children: [
-                              Expanded(
-                                child: buildGlassPanel(child: _buildAiPanel()),
-                              ),
-                              if (selectedPatientId != null) ...[
-                                const SizedBox(height: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                  ),
-                                  child: ElevatedButton.icon(
-                                    onPressed: () async {
+                          child: buildGlassPanel(child: _buildAiPanel()),
+                        ),
+                        if (selectedPatientId != null) ...[
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                setState(() {
+                                  _aiStreaming = true;
+                                  _showAiPanel = true;
+                                });
+
+                                final data = await _requestAiExplanation(
+                                  selectedPatientId!,
+                                );
+                                final int pid = data['patient_id'];
+                                final String full = data['message'] ?? '';
+
+                                _aiTypingTimer?.cancel();
+                                _aiTypingIndex = 0;
+                                _aiFullText = full;
+
+                                setState(() {
+                                  _aiStreams[pid] = StringBuffer();
+                                  _aiResponses.remove(pid);
+                                });
+
+                                _aiTypingTimer = Timer.periodic(
+                                  const Duration(milliseconds: 15),
+                                  (_) {
+                                    if (_aiTypingIndex < _aiFullText.length) {
                                       setState(() {
-                                        _aiStreaming = true;
-                                        _showAiPanel = true;
+                                        _aiStreams[pid]!.write(
+                                          _aiFullText[_aiTypingIndex],
+                                        );
+                                        _aiTypingIndex++;
                                       });
-
-                                      final data = await _requestAiExplanation(
-                                        selectedPatientId!,
-                                      );
-                                      final int pid = data['patient_id'];
-                                      final String full = data['message'] ?? '';
-
+                                    } else {
                                       _aiTypingTimer?.cancel();
-                                      _aiTypingIndex = 0;
-                                      _aiFullText = full;
-
+                                      _aiTypingTimer = null;
                                       setState(() {
-                                        _aiStreams[pid] = StringBuffer();
-                                        _aiResponses.remove(pid);
+                                        _aiResponses[pid] = _aiFullText;
+                                        _aiStreams[pid]?.clear();
+                                        _aiStreaming = false;
                                       });
-
-                                      _aiTypingTimer = Timer.periodic(
-                                        const Duration(milliseconds: 15),
-                                        (_) {
-                                          if (_aiTypingIndex <
-                                              _aiFullText.length) {
-                                            setState(() {
-                                              _aiStreams[pid]!.write(
-                                                _aiFullText[_aiTypingIndex],
-                                              );
-                                              _aiTypingIndex++;
-                                            });
-                                          } else {
-                                            _aiTypingTimer?.cancel();
-                                            _aiTypingTimer = null;
-                                            setState(() {
-                                              _aiResponses[pid] = _aiFullText;
-                                              _aiStreams[pid]?.clear();
-                                              _aiStreaming = false;
-                                            });
-                                          }
-                                        },
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.auto_awesome,
-                                      size: 14,
-                                    ),
-                                    label: const Text("Explain with AI"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(
-                                        0xFF7F77DD,
-                                      ).withOpacity(0.15),
-                                      foregroundColor: const Color(0xFFAFA9EC),
-                                      side: const BorderSide(
-                                        color: Color(0xFF7F77DD),
-                                        width: 0.8,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                    ),
-                                  ),
+                                    }
+                                  },
+                                );
+                              },
+                              icon: const Icon(Icons.auto_awesome, size: 14),
+                              label: const Text("Explain with AI"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(
+                                  0xFF7F77DD,
+                                ).withOpacity(0.15),
+                                foregroundColor: const Color(0xFFAFA9EC),
+                                side: const BorderSide(
+                                  color: Color(0xFF7F77DD),
+                                  width: 0.8,
                                 ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-
-                        // 2° Quadrante: Dettagli, Gauge e Badge (Destra)
-                        Expanded(
-                          flex: 1,
-                          child: Column(
-                            children: [
-                              // Sotto-riga 1: Quick Status & Emodynamic Status
-                              Expanded(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(
-                                      child: buildGlassPanel(
-                                        child: Column(
-                                          children: [
-                                            const Text(
-                                              "QUICK STATUS",
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 10,
-                                                letterSpacing: 1.2,
-                                              ),
-                                            ),
-                                            const Divider(
-                                              color: Colors.white10,
-                                            ),
-                                            Expanded(
-                                              child:
-                                                  selectedPatientId != null &&
-                                                      allTrends[selectedPatientId]
-                                                              ?.isNotEmpty ==
-                                                          true
-                                                  ? CircularSummaryPanel(
-                                                      trend:
-                                                          allTrends[selectedPatientId]!
-                                                              .last,
-                                                    )
-                                                  : _buildSimplePlaceholder(
-                                                      "Seleziona paziente",
-                                                    ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: buildGlassPanel(
-                                        child: Column(
-                                          children: [
-                                            const Text(
-                                              "EMODYNAMIC STATUS",
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 10,
-                                                letterSpacing: 1.2,
-                                              ),
-                                            ),
-                                            const Divider(
-                                              color: Colors.white10,
-                                            ),
-                                            selectedPatientId != null
-                                                ? Expanded(
-                                                    child: SingleChildScrollView(
-                                                      physics:
-                                                          const BouncingScrollPhysics(),
-                                                      child: ClinicalRadarChart(
-                                                        radarData: [
-                                                          addRiskCategory(),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  )
-                                                : _buildSimplePlaceholder(
-                                                    "Seleziona paziente",
-                                                  ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                              ),
-                              const SizedBox(height: 16),
-                              // Sotto-riga 2: Trend Insights & Risk Indicators
-                              Expanded(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(
-                                      child: buildGlassPanel(
-                                        child: Column(
-                                          children: [
-                                            const Text(
-                                              "TREND INSIGHTS",
-                                              style: TextStyle(
-                                                color: Colors.white54,
-                                                fontSize: 10,
-                                                letterSpacing: 1.2,
-                                              ),
-                                            ),
-                                            const Divider(
-                                              color: Colors.white10,
-                                            ),
-                                            Expanded(
-                                              child: SingleChildScrollView(
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                child: FeaturePanel(
-                                                  insights:
-                                                      (selectedPatientId !=
-                                                              null &&
-                                                          allTrends[selectedPatientId]
-                                                                  ?.isNotEmpty ==
-                                                              true)
-                                                      ? getFeatureInsights(
-                                                          allTrends[selectedPatientId]!
-                                                              .last,
-                                                        )
-                                                      : [],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: _buildRiskBadgesPanel({
-                                        "hemo_deterioration":
-                                            selectedPatientId == null
-                                            ? false
-                                            : allPatients[selectedPatientId]
-                                                  ?.pattern
-                                                  .hemoDeterioration,
-                                        "resp_failure":
-                                            selectedPatientId == null
-                                            ? false
-                                            : allPatients[selectedPatientId]
-                                                  ?.pattern
-                                                  .progRespFailure,
-                                        "dynamic_sepsis":
-                                            selectedPatientId == null
-                                            ? false
-                                            : allPatients[selectedPatientId]
-                                                  ?.pattern
-                                                  .dynamicSepsis,
-                                      }),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // --- RIGA INFERIORE (Quadrante 3 e 4) ---
-                  Expanded(
-                    flex: 4,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // 3° Quadrante: Lista Triage (Sinistra)
-                        Expanded(
-                          flex: 1,
-                          child: buildGlassPanel(
-                            child: TriageMasterView(
-                              allPatients: allPatients.map(
-                                (key, value) =>
-                                    MapEntry(key, value.sensorUpdate),
-                              ),
-                              selectedPatientId: selectedPatientId,
-                              onPatientSelected: (p) => setState(
-                                () => selectedPatientId = p.patientId,
+                                elevation: 0,
+                                minimumSize: const Size.fromHeight(
+                                  45,
+                                ), // Forza il bottone ad essere ben visibile
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        // 4° Quadrante: Grafico + bottone Explain with AI
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // 2° Quadrante: Dettagli, Gauge e Badge (Destra)
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      children: [
+                        // Sotto-riga 1: Quick Status & Emodynamic Status
                         Expanded(
-                          flex: 1,
-                          child: Column(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [Expanded(child: _buildChart())],
+                            children: [
+                              Expanded(
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "QUICK STATUS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      Expanded(
+                                        child:
+                                            selectedPatientId != null &&
+                                                allTrends[selectedPatientId]
+                                                        ?.isNotEmpty ==
+                                                    true
+                                            ? CircularSummaryPanel(
+                                                trend:
+                                                    allTrends[selectedPatientId]!
+                                                        .last,
+                                              )
+                                            : _buildSimplePlaceholder(
+                                                "Seleziona paziente",
+                                              ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "EMODYNAMIC STATUS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      selectedPatientId != null
+                                          ? Expanded(
+                                              child: SingleChildScrollView(
+                                                physics:
+                                                    const BouncingScrollPhysics(),
+                                                child: ClinicalRadarChart(
+                                                  radarData: [
+                                                    addRiskCategory(),
+                                                  ],
+                                                ),
+                                              ),
+                                            )
+                                          : _buildSimplePlaceholder(
+                                              "Seleziona paziente",
+                                            ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Sotto-riga 2: Trend Insights & Risk Indicators
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: buildGlassPanel(
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        "TREND INSIGHTS",
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 10,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      const Divider(color: Colors.white10),
+                                      Expanded(
+                                        child: SingleChildScrollView(
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          child: FeaturePanel(
+                                            insights:
+                                                (selectedPatientId != null &&
+                                                    allTrends[selectedPatientId]
+                                                            ?.isNotEmpty ==
+                                                        true)
+                                                ? getFeatureInsights(
+                                                    allTrends[selectedPatientId]!
+                                                        .last,
+                                                  )
+                                                : [],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _buildRiskBadgesPanel({
+                                  "hemo_deterioration":
+                                      selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .hemoDeterioration,
+                                  "resp_failure": selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .progRespFailure,
+                                  "dynamic_sepsis": selectedPatientId == null
+                                      ? false
+                                      : allPatients[selectedPatientId]
+                                            ?.pattern
+                                            .dynamicSepsis,
+                                }),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -928,29 +838,43 @@ class _LivestreamPageState extends State<LivestreamPage> {
                 ],
               ),
             ),
-          ),
 
-          // Pannello AI in slide da destra
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeInOut,
-            top: 0,
-            right: _showAiPanel ? 0 : -360,
-            bottom: 0,
-            child: selectedPatientId != null
-                ? AiExplanationPanel(
-                    patientId: selectedPatientId!,
-                    streamingText:
-                        _aiStreams[selectedPatientId]?.toString() ?? '',
-                    completedText: _aiResponses[selectedPatientId],
-                    isStreaming: _aiStreaming,
-                    onClose: () => setState(() => _showAiPanel = false),
-                    onRegenerate: () =>
-                        _requestAiExplanation(selectedPatientId!),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
+            const SizedBox(height: 16),
+
+            // --- RIGA INFERIORE (Quadrante 3 e 4) ---
+            Expanded(
+              flex: 4,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 3° Quadrante: Lista Triage (Sinistra)
+                  Expanded(
+                    flex: 1,
+                    child: buildGlassPanel(
+                      child: TriageMasterView(
+                        allPatients: allPatients.map(
+                          (key, value) => MapEntry(key, value.sensorUpdate),
+                        ),
+                        selectedPatientId: selectedPatientId,
+                        onPatientSelected: (p) =>
+                            setState(() => selectedPatientId = p.patientId),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // 4° Quadrante: Grafico
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [Expanded(child: _buildChart())],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
