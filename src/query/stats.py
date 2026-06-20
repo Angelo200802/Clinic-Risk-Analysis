@@ -63,7 +63,7 @@ def get_columns():
 
 vital_signs = get_columns()
 
-def get_demographic_stress_map(ds:DataFrame):
+def get_demographic_stress_map():
     ds_with_decades = (
         ds
         .withColumn(
@@ -116,6 +116,9 @@ def get_stats(signs:str):
 
 @router_stats.get("/stats/age_risk")
 def get_age_risk():
+    return age_risk()
+
+def age_risk():
 
     if not 'risk_by_age' in _cache:
         _cache['risk_by_age'] = (
@@ -133,6 +136,9 @@ def get_age_risk():
 
 @router_stats.get("/stats/gender_risk")
 def get_gender_risk():
+    return gender_risk()
+
+def gender_risk():
 
     if not 'risk_by_gender' in _cache:
         _cache['risk_by_gender'] = (
@@ -144,6 +150,9 @@ def get_gender_risk():
 
 @router_stats.get("/stats/bmi_risk")
 def get_bmi_risk():
+    return bmi_risk()
+
+def bmi_risk():
 
     if not 'riks_by_bmi' in _cache:
         _cache['riks_by_bmi'] = (
@@ -158,10 +167,13 @@ def get_bmi_risk():
 
 @router_stats.get("/stats/demographic_stress_map")
 def get_demographic_stress_map_api():
-    return {"data": get_demographic_stress_map(ds)}
+    return {"data": get_demographic_stress_map()}
 
 @router_stats.get("/stats/risk_composition")
 def get_risk_composition():
+    return risk_composition()
+
+def risk_composition():
 
     risk_composition = ds.groupBy("Risk Category").count()
 
@@ -169,6 +181,9 @@ def get_risk_composition():
 
 @router_stats.get("/stats/correlation_matrix")
 def get_correlation_matrix():
+    return correlation_matrix()
+
+def correlation_matrix():
 
     corr_matrix = calculate_correlation_matrix()
     

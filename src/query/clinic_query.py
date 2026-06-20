@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from spark_manager import load_dataset
 from pyspark.sql import DataFrame, Window, functions as F
 import os, logging
@@ -46,6 +46,9 @@ derived_index.cache()
 
 @router_clinic_query.get("/clinic/derived_indices")
 def get_derived_indices():
+    return derived_indices()
+
+def derived_indices():
     
     if not 'avg_index' in _cache:
         _cache['avg_index'] = (
@@ -66,7 +69,9 @@ def get_derived_indices():
 
 @router_clinic_query.get("/clinic/top_cardiac_stress")
 def get_top_cardiac_stress():
-    
+    return top_cardiac_stress()
+
+def top_cardiac_stress():   
     if not 'top_cardiac_stress' in _cache:
         _cache['top_cardiac_stress'] = (
             derived_index
@@ -91,7 +96,9 @@ def get_top_cardiac_stress():
 
 @router_clinic_query.get("/clinic/obesity_mismatch")
 def get_obesity_mismatch():
-    
+    return obesity_mismatch()
+
+def obesity_mismatch(): 
     
     if not 'obesity_mismatch_query' in _cache:
         
@@ -111,7 +118,9 @@ def get_obesity_mismatch():
 
 @router_clinic_query.get("/clinic/occult_shock")
 def get_occult_shock():
-    
+    return occult_shock()
+
+def occult_shock():
     if not 'occult_shock' in _cache:
         _cache['occult_shock'] = (
             derived_index
@@ -129,7 +138,7 @@ def get_occult_shock():
 
 @router_clinic_query.get("/clinic/k_nearest")
 def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
-    
+  
     if not 'k_nearest' in _cache:
         high_risk_center = (
             ds

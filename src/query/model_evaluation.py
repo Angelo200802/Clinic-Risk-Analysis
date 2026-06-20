@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from spark_manager import load_dataset
 from pyspark.ml.feature import Bucketizer
 from pyspark.sql import DataFrame, functions as F
@@ -26,17 +26,21 @@ def evaluate_by_category(df:DataFrame,category_col):
     return stratified_metrics
 
 def add_age_group(df:DataFrame):
-    splits = [0.0, 18.0, 30.0, 50.0, 70.0, float("inf")]
+    splits = [0.0, 9.0, 19.0, 29.0, 39.0, 49.0, 59.0, 69.0, 79.0, float("inf")]
     bucketizer = Bucketizer(splits=splits, inputCol="Age", outputCol="age_group_idx")
     
     df_with_idx = bucketizer.transform(df)
     return df_with_idx.withColumn(
         "Age_Range", 
-        F.when(F.col("age_group_idx") == 0.0, "0-18")
-         .when(F.col("age_group_idx") == 1.0, "18-30")
-         .when(F.col("age_group_idx") == 2.0, "30-50")
-         .when(F.col("age_group_idx") == 3.0, "50-70")
-         .when(F.col("age_group_idx") == 4.0, "70+")
+        F.when(F.col("age_group_idx") == 0.0, "0-9")
+         .when(F.col("age_group_idx") == 1.0, "10-19")
+         .when(F.col("age_group_idx") == 2.0, "20-29")
+         .when(F.col("age_group_idx") == 3.0, "30-39")
+         .when(F.col("age_group_idx") == 4.0, "40-49")
+         .when(F.col("age_group_idx") == 5.0, "50-59")
+         .when(F.col("age_group_idx") == 6.0, "60-69")
+         .when(F.col("age_group_idx") == 7.0, "70-79")
+         .when(F.col("age_group_idx") == 8.0, "80+")
          .otherwise("Unknown")
     )
 
@@ -56,6 +60,9 @@ def add_bmi_category(df:DataFrame):
 
 @router_model_ev.get("/evaluation/ensemble_consensus")
 def get_ensemble_consensus():
+    return ensemble_consensus()
+
+def ensemble_consensus():
     if 'ensemble_consensus' not in _cache:
         _cache['ensemble_consensus'] = (
             ds.withColumn(
@@ -88,6 +95,9 @@ def get_ensemble_consensus():
 
 @router_model_ev.get("/evaluation/confusion_matrix")
 def get_confusion_matrix():
+    return confusion_matrix()
+
+def confusion_matrix():
     df_eval = ds.withColumn("Result_Type", 
     F.when((F.col("Prediction") == "High Risk") & (F.col("Risk Category") == "High Risk"), "TP")
      .when((F.col("Prediction") == "Low Risk") & (F.col("Risk Category") == "Low Risk"), "TN")
@@ -103,6 +113,9 @@ def get_confusion_matrix():
 
 @router_model_ev.get("/evaluation/metrics_shock_risk")
 def get_metrics_shock_risk():
+    return metrics_shock_risk()
+
+def metrics_shock_risk():
     if not 'evaluation_by_shock_risk' in _cache:
         _cache['evaluation_by_shock_risk'] = (
             evaluate_model(
@@ -120,12 +133,18 @@ def get_metrics_shock_risk():
 
 @router_model_ev.get("/evaluation/metrics")
 def get_metrics():
+    return metrics()
+
+def metrics():
     if not 'evaluation' in _cache:
         _cache['evaluation'] = evaluate_model(predictions=ds,label="Risk Category", predict_label="Prediction")
     return _cache['evaluation']
 
 @router_model_ev.get("/evaluation/evaluate_by_category")
 def get_evaluation_by_category():
+    return evaluation_by_category()
+
+def evaluation_by_category():
     if not 'evaluation_by_category' in _cache:
         _cache['evaluation_by_category'] = {
             "Gender" : evaluate_by_category(ds, category_col="Gender"),
