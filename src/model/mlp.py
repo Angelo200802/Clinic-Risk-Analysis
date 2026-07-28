@@ -55,7 +55,6 @@ pipeline_ann = Pipeline(stages=[
 paramGrid = (ParamGridBuilder()
              .addGrid(ann.maxIter, [100,200,1000])
              .build())
-
 evaluator = BinaryClassificationEvaluator(
     labelCol="RiskCategory_b", 
     rawPredictionCol="probability", 

@@ -1,10 +1,10 @@
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
-from pyspark.sql.types import Row, StructType, StructField,IntegerType, TimestampType, DoubleType, StringType
+from pyspark.sql.types import Row, StructType, StructField,IntegerType, DoubleType, StringType
 from pyspark.sql import Window
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col, window
 from redis import Redis
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter
 from spark_manager import load_dataset, get_session
 import os, logging
 from pyspark.sql import DataFrame

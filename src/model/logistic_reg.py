@@ -136,38 +136,9 @@ def fit(cv:CrossValidator,train,save:bool = True,path = ""):
     return best_model
 
 if __name__ == "__main__":
-    train, test = ds.randomSplit([0.7, 0.3], seed=42)
+    #train, test = ds.randomSplit([0.7, 0.3], seed=42)
     #model = fit(cv,train,path="./src/model/saved_models/log_reg2")
     model = PipelineModel.load(SAVE_MODEL_PATH+"/log_reg_pipeline")
-
-    predictions = model.transform(test)
-    predictions.groupBy("RiskCategory_b", "prediction").count().show()
-    metrics = evaluate_model(predictions,"RiskCategory_b")
-    
-    with open(os.path.join(SAVE_MODEL_PATH, "metrics.json"), "r") as f:
-        met = json.load(f)
-        met["logistic_regression"] = metrics
-        
-    f.close()
-    with open(SAVE_MODEL_PATH+"/metrics.json", "w") as f:    
-        json.dump(met, f, indent=4)
-    f.close()
-    
-    feature_names = [col for col in ds.columns if col not in [ds.columns[-1],"Gender", "Timestamp", "Patient ID", "Height (m)", "Weight (kg)", "Systolic Blood Pressure", "Diastolic Blood Pressure"]]
-    coefficients = model.stages[-1].coefficients.toArray()
-    print(f"Intercetta: {model.stages[-1].intercept:.4f}")
-    print("\n--- Coefficients ---")
-    # Genera i nomi mappati
-    mapped_names = get_poly_feature_names(feature_names, degree=2)
-    coeff_list = []
-    for name, coeff in zip(mapped_names, coefficients):
-        coeff_list.append((name, coeff))
-    sorted_coeffs = sorted(coeff_list, key=lambda x: abs(x[1]), reverse=True)
-
-    print(f"{'Feature':<40} | {'Coefficiente':<12}")
-    print("-" * 55)
-    for name, val in sorted_coeffs[:15]: # Vediamo i primi 15
-        print(f"{name:<40} | {val:>12.4f}")
     print("Regularization Parameter:", model.stages[-1].getOrDefault('regParam'))
     print("ElasticNet Parameter:", model.stages[-1].getOrDefault('elasticNetParam'))
     print("Max Iterations:", model.stages[-1].getOrDefault('maxIter'))

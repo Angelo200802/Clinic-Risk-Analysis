@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from pyspark.ml import PipelineModel
 from query.clinic_query import (
     router_clinic_query,
     derived_indices,
@@ -28,6 +29,11 @@ from streaming import router_streaming, start_streaming
 import logging, dotenv, asyncio
 import bus
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+SAVE_MODEL_PATH = os.getenv("SAVE_MODEL_PATH")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,6 +77,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 def hello_world():
