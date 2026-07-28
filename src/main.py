@@ -82,5 +82,3 @@ app.add_middleware(
 @app.get("/")
 def hello_world():
     return {"message": "Hello World from Vital Signs Analysis Application!"}
-
-    
