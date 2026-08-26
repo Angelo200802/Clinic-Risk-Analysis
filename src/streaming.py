@@ -83,32 +83,6 @@ schema = StructType([
     StructField("Risk Category", StringType(), True)
 ])
 
-def minibatch_job(df_batch : DataFrame, batch_id):
-    
-    df_batch.cache() 
-    current_count = df_batch.count()
-    
-    if current_count > 0:
-        logging.info(f"--- START BATCH {batch_id} (Records: {current_count}) ---")
-        try:
-            prediction = ensemble.classify(df_batch).collect() 
-            logging.info(f"Batch {batch_id} completato. Predizioni: {len(prediction)}")
-            
-            for row in prediction:
-                data_dict = row.asDict()
-                bus.main_loop.call_soon_threadsafe(
-                    bus.data_queue.put_nowait, 
-                    {
-                        "type" : "prediction",
-                        "data" : { k : data_dict[k] for k in data_dict if k not in ['Risk Category','pred_logistic_regression','pred_mlp', 'pred_naive_bayes', 'weighted_score'] }
-                    }
-                )
-            logging.info(f"--- END BATCH {batch_id} ---")
-        except Exception as e:
-            logging.error(f"Errore nel processamento del batch: {e}")
-    
-    df_batch.unpersist()
-
 def save_to_redis(row : dict):
     patient_id = row['sensor_update']['Patient ID']
     history_key = f"patient_history:{patient_id}"
@@ -321,22 +295,22 @@ def start_streaming():
             col("Patient ID")
         )
         .agg(
-            F.last("Heart Rate").alias("Heart Rate"),
-            F.last("Respiratory Rate").alias("Respiratory Rate"),
-            F.last("Oxygen Saturation").alias("Oxygen Saturation"),
-            F.last("Systolic Blood Pressure").alias("Systolic Blood Pressure"),
-            F.last("Diastolic Blood Pressure").alias("Diastolic Blood Pressure"),
-            F.last("Body Temperature").alias("Body Temperature"),
-            F.last("Age").alias("Age"),
-            F.last("Gender").alias("Gender"),
-            F.last("Weight (kg)").alias("Weight (kg)"),
-            F.last("Height (m)").alias("Height (m)"),
-            F.last("Derived_MAP").alias("Derived_MAP"),
-            F.last("Derived_HRV").alias("Derived_HRV"),
-            F.last("Derived_BMI").alias("Derived_BMI"),
-            F.last("Derived_Pulse_Pressure").alias("Derived_Pulse_Pressure"), 
-            F.last("Timestamp").alias("Timestamp"),
-            F.last("Prediction").alias("Prediction"),
+            F.max_by("Heart Rate","Timestamp").alias("Heart Rate"),
+            F.max_by("Respiratory Rate","Timestamp").alias("Respiratory Rate"),
+            F.max_by("Oxygen Saturation","Timestamp").alias("Oxygen Saturation"),
+            F.max_by("Systolic Blood Pressure","Timestamp").alias("Systolic Blood Pressure"),
+            F.max_by("Diastolic Blood Pressure","Timestamp").alias("Diastolic Blood Pressure"),
+            F.max_by("Body Temperature","Timestamp").alias("Body Temperature"),
+            F.max_by("Age","Timestamp").alias("Age"),
+            F.max_by("Gender", "Timestamp").alias("Gender"),
+            F.max_by("Weight (kg)", "Timestamp").alias("Weight (kg)"),
+            F.max_by("Height (m)", "Timestamp").alias("Height (m)"),
+            F.max_by("Derived_MAP", "Timestamp").alias("Derived_MAP"),
+            F.max_by("Derived_HRV", "Timestamp").alias("Derived_HRV"),
+            F.max_by("Derived_BMI", "Timestamp").alias("Derived_BMI"),
+            F.max_by("Derived_Pulse_Pressure", "Timestamp").alias("Derived_Pulse_Pressure"), 
+            F.max("Timestamp").alias("Timestamp"),
+            F.max_by("Prediction", "Timestamp").alias("Prediction"),
             F.avg(
                 F.when(F.lower(F.col("Prediction")) == "high risk", 1).otherwise(0)
             ).alias("risk_ratio"),
