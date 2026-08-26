@@ -191,9 +191,9 @@ class _InsigthPageState extends State<InsigthPage> {
                                           scatterData:
                                               snapshot.data![5]['data'],
                                           xKey: "Derived_MAP",
-                                          yKey: "Derived_BMI",
+                                          yKey: "Derived_HRV",
                                           xLabel: "Derived MAP (mmHg)",
-                                          yLabel: "Derived BMI",
+                                          yLabel: "Derived HRV",
                                           highRiskColor: Colors.redAccent,
                                           lowRiskColor: Colors.greenAccent,
                                         ),
@@ -229,7 +229,8 @@ class _InsigthPageState extends State<InsigthPage> {
 
                                     xLabel: "Shock Index (HR / SBP)",
 
-                                    yLabel: "Pulse Pressure Index (PP / HR)",
+                                    yLabel:
+                                        "Pulse Pressure Index [(SBP - DBP) / SBP]",
 
                                     highRiskColor: Colors.orangeAccent,
 

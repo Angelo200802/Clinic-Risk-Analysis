@@ -80,11 +80,10 @@ async def generate_streaming_data():
             post_data(next)
         except Exception as e:
             logging.error(f"Failed to post data: {e}")
-        time.sleep(10)
+        time.sleep(5)
     
 if __name__ == "__main__":
     logging.log(logging.INFO, "Starting streaming data generation...")
     for i in range(int(os.getenv("N_JOBS"))):
         thread = Thread(target = lambda : asyncio.run(generate_streaming_data()))
         thread.start()
-        time.sleep(5)

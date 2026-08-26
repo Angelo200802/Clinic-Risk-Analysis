@@ -49,7 +49,7 @@ def get_derived_indices():
     return derived_indices()
 
 def derived_indices():
-    
+
     if not 'avg_index' in _cache:
         _cache['avg_index'] = (
             derived_index
@@ -140,43 +140,60 @@ def occult_shock():
 def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
   
     if not 'k_nearest' in _cache:
-        high_risk_center = (
+        stats = (
             ds
-            .filter(F.col("Risk Category") == "High Risk")
-            .agg(
-                F.median("Derived_MAP").alias("map")
-                , F.median("Derived_BMI").alias("bmi")
+            .select(
+                F.mean("Derived_MAP").alias("map_mean"),
+                F.stddev("Derived_MAP").alias("map_std"),
+                F.mean("Derived_HRV").alias("hrv_mean"),
+                F.stddev("Derived_HRV").alias("hrv_std"),
             )
             .collect()[0]
         )
-    
-        _cache['k_nearest'] = (
+
+        ds_std = (
             ds
+            .withColumn("MAP_z", (F.col("Derived_MAP") - stats["map_mean"]) / stats["map_std"])
+            .withColumn("HRV_z", (F.col("Derived_HRV") - stats["hrv_mean"]) / stats["hrv_std"])
+        )
+
+        high_risk_center = (
+            ds_std
+            .filter(F.col("Risk Category") == "High Risk")
+            .agg(
+                F.median("MAP_z").alias("map_z"),
+                F.median("HRV_z").alias("hrv_z"),
+            )
+            .collect()[0]
+        )
+
+        _cache['k_nearest'] = (
+            ds_std
             .filter(F.col("Risk Category") == "Low Risk")
             .withColumn(
                 "Dist",
-                F.sqrt(F.pow(F.col("Derived_MAP") - high_risk_center['map'], 2) 
-                + 
-                F.pow(F.col("Derived_BMI") - high_risk_center['bmi'], 2))
-            ) 
-            .filter(
-                (F.col("Dist") < radius) & (F.col("Dist") >= 0.01)
+                F.sqrt(
+                    F.pow(F.col("MAP_z") - high_risk_center["map_z"], 2)
+                    + F.pow(F.col("HRV_z") - high_risk_center["hrv_z"], 2)
+                )
             )
+            .filter((F.col("Dist") < radius) & (F.col("Dist") >= 0.01))
             .orderBy("Dist")
-            .select("Derived_MAP", "Derived_BMI", "Risk Category")
+            .select("Patient ID", "Derived_MAP", "Derived_HRV", "Risk Category")   # colonne originali per il plot
             .sample(withReplacement=False, fraction=fraction, seed=42)
             .toPandas().to_dict(orient="records")
             + [
                 {
-                    "Derived_MAP": high_risk_center['map'],
-                    "Derived_BMI": high_risk_center['bmi'], 
+                    "Patient ID": "High Risk Center",
+                    "Derived_MAP": stats["map_mean"] + high_risk_center["map_z"] * stats["map_std"],
+                    "Derived_HRV": stats["hrv_mean"] + high_risk_center["hrv_z"] * stats["hrv_std"],
                     "Risk Category": "High Risk"
                 }
             ]
         )
     return {
-        "data": _cache['k_nearest']
-    }
+                "data": _cache['k_nearest']
+            }
 
 @router_clinic_query.get("/clinic/metabolic_shockindex")
 def get_metabolic_shockindex(fraction: float = 0.05):
@@ -185,6 +202,7 @@ def get_metabolic_shockindex(fraction: float = 0.05):
         _cache['metabolic_shockindex'] = (
             derived_index
             .select(
+                "Patient ID",
                 "ShockIndex",
                 "PulsePressureIndex",
                 "Risk Category"
@@ -192,6 +210,7 @@ def get_metabolic_shockindex(fraction: float = 0.05):
             .sample(withReplacement=False, fraction=fraction, seed=42)
             .toPandas().to_dict(orient="records")
         )
+
     return {
         "data": _cache['metabolic_shockindex']
     }

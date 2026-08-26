@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from pyspark.ml import PipelineModel
 from query.clinic_query import (
     router_clinic_query,
     derived_indices,
@@ -18,7 +17,6 @@ from query.model_evaluation import (
 )
 from query.stats import (
     router_stats,
-    correlation_matrix,
     risk_composition,
     get_demographic_stress_map,
     gender_risk,
@@ -45,8 +43,7 @@ async def lifespan(app: FastAPI):
     metrics()
     metrics_shock_risk()
     confusion_matrix()
-    ensemble_consensus() 
-    correlation_matrix()
+    ensemble_consensus()
     risk_composition()
     get_demographic_stress_map()
     gender_risk()

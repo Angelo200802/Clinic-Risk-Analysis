@@ -27,7 +27,6 @@ class ClinicScatterChart extends StatelessWidget {
     if (scatterData.isEmpty)
       return const Center(child: Text("Dati non disponibili"));
 
-    // 1. Estrazione sicura dei valori
     final xValues = scatterData
         .map((e) => (e[xKey] as num? ?? 0).toDouble())
         .toList();
@@ -40,20 +39,15 @@ class ClinicScatterChart extends StatelessWidget {
     double minY = yValues.reduce(min);
     double maxY = yValues.reduce(max);
 
-    // 2. Protezione contro range zero (il motivo del crash Infinity/NaN)
     if (minX == maxX) {
       minX -= 10;
       maxX += 10;
     }
-    if (minY == maxY) {
-      minY -= 10;
-      maxY += 10;
-    }
 
-    // 3. Calcolo intervalli FISSI. Usiamo numeri interi per evitare arrotondamenti NaN
-    // Importante: non lasciare che fl_chart decida l'interval
-    double xInterval = ((maxX - minX) / 4).clamp(1.0, double.infinity);
-    double yInterval = ((maxY - minY) / 4).clamp(1.0, double.infinity);
+    double xInterval = (maxX - minX) / 4;
+    double yInterval = (maxY - minY) / 4;
+    if (xInterval <= 0) xInterval = 1.0;
+    if (yInterval <= 0) yInterval = 1.0;
 
     return ScatterChart(
       ScatterChartData(
@@ -61,6 +55,34 @@ class ClinicScatterChart extends StatelessWidget {
         maxX: maxX,
         minY: minY,
         maxY: maxY,
+        // 1. Interazione al passaggio del mouse/tocco
+        scatterTouchData: ScatterTouchData(
+          enabled: true,
+          touchTooltipData: ScatterTouchTooltipData(
+            getTooltipItems: (ScatterSpot touchedSpot) {
+              // 2. Risaliamo al punto originale tramite indice nella lista
+              final index = scatterData.indexWhere((point) {
+                final px = (point[xKey] as num? ?? 0).toDouble();
+                final py = (point[yKey] as num? ?? 0).toDouble();
+                return px == touchedSpot.x && py == touchedSpot.y;
+              });
+
+              if (index == -1) return null;
+
+              final point = scatterData[index];
+              final patientId = point['Patient ID']?.toString() ?? 'N/A';
+
+              return ScatterTooltipItem(
+                'ID: $patientId',
+                textStyle: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              );
+            },
+          ),
+        ),
         scatterSpots: scatterData.map((point) {
           final isHighRisk = point['Risk Category'] == "High Risk";
           final x = (point[xKey] as num? ?? 0).toDouble();
@@ -87,11 +109,9 @@ class ClinicScatterChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 30,
-              // FORZIAMO l'intervallo. Se non lo metti, la libreria usa
-              // getEfficientInterval() che causa il crash NaN/Infinity
               interval: xInterval,
               getTitlesWidget: (value, meta) => Text(
-                value.toInt().toString(),
+                value.toStringAsFixed(2),
                 style: const TextStyle(color: Colors.white54, fontSize: 10),
               ),
             ),
@@ -104,18 +124,12 @@ class ClinicScatterChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 40,
-              interval: yInterval, // FORZIAMO l'intervallo
+              interval: yInterval,
               getTitlesWidget: (value, meta) => Text(
-                value.toInt().toString(),
+                value.toStringAsFixed(2),
                 style: const TextStyle(color: Colors.white54, fontSize: 10),
               ),
             ),
-          ),
-          topTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
-          ),
-          rightTitles: const AxisTitles(
-            sideTitles: SideTitles(showTitles: false),
           ),
         ),
         gridData: FlGridData(

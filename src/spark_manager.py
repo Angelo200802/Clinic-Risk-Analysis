@@ -17,7 +17,6 @@ def get_session() -> SparkSession:
         SparkSession.builder
         .appName("VitalSignsProject")
         .master("local[*]")
-        #.config("spark.jars.packages", redis_package) # Scarica il connettore automaticamente
         .config("spark.driver.memory", "4g")   
         .config("spark.ui.enabled", "false")
         .config("spark.port.maxRetries", "100")       

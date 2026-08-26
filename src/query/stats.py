@@ -181,10 +181,6 @@ def risk_composition():
 
 @router_stats.get("/stats/correlation_matrix")
 def get_correlation_matrix():
-    return correlation_matrix()
-
-def correlation_matrix():
-
     corr_matrix = calculate_correlation_matrix()
     
     return {

@@ -287,10 +287,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            buildPanelHeader(
-                              Icons.map,
-                              "Demographic Stress Map",
-                            ),
+                            buildPanelHeader(Icons.map, "Heatmap Demografica"),
                             const SizedBox(height: 20),
                             DemographicStressMap(data: stressMap),
                           ],

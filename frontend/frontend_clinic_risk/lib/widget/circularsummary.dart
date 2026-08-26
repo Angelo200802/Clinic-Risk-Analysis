@@ -128,28 +128,6 @@ class CircularSummaryPanel extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 40),
-              Column(
-                children: [
-                  Text(
-                    "Number of Samples",
-                    style: const TextStyle(
-                      fontSize: 9,
-                      color: Colors.white54,
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    trend.nSamples.toString(),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white,
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
         ],

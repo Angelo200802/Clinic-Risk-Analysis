@@ -83,7 +83,7 @@ schema = StructType([
     StructField("Risk Category", StringType(), True)
 ])
 
-def batch_job(df_batch : DataFrame, batch_id):
+def minibatch_job(df_batch : DataFrame, batch_id):
     
     df_batch.cache() 
     current_count = df_batch.count()
