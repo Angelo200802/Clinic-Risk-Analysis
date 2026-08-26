@@ -393,7 +393,6 @@ def ask_llm(prompt:str) -> str:
 async def run_llm_inference(patient_id, history):
     current = history[0]
     
-    # 1. Estrai e formatta i dati prima, così eviti query complesse nella f-string
     gender = current['sensor_update']['Gender']
     age = current['sensor_update']['Age']
     bmi = current['sensor_update']['Derived_BMI']
