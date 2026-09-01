@@ -1,10 +1,10 @@
 from requests import get as http_get, post as http_post, Response
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
+from langchain_core.output_parsers import JsonOutputParser
 from threading import Thread
 from datetime import datetime
-import time, os, dotenv, json, asyncio, logging, random
+import os, dotenv, json, asyncio, logging
 
 logging.basicConfig(level=logging.INFO)
 
@@ -21,9 +21,10 @@ PROMPT = """Sei un generatore di dati sintetici stocastico per monitoraggio biom
 
 ## REGOLE DI GENERAZIONE
 1. **Variazione Casuale e Bidirezionale**: Per ogni parametro di input, l'algoritmo deve scegliere casualmente se il valore deve **salire o scendere**. Non deve esserci un trend unidirezionale; le statistiche devono poter diminuire tanto quanto aumentare.
-2. **Delta di Oscillazione**: Applica uno scostamento casuale (delta) compreso tra l'1% e il 5% del valore originale. Il segno (+ o -) di tale delta deve essere determinato in modo stocastico (lancio di moneta virtuale) per ogni singola chiave del JSON.
+2. **Delta di Oscillazione**: Applica uno scostamento casuale (delta) compreso tra l'0% e il 5% del valore originale. Il segno (+ o -) di tale delta deve essere determinato in modo stocastico per ogni singola chiave del JSON.
 3. **Indipendenza dei Parametri**: La variazione di un segnale non deve influenzare gli altri. Se la frequenza cardiaca sale, la pressione può scendere o restare stabile, senza alcuna coerenza clinica.
 4. **Limiti di Sicurezza**: Assicurati che i valori non diventino negativi e non superino i limiti fisiologici massimi (es. SpO2 max 100%).
+5. **IMPORTANTE** : Non devi seguire per forza il trend del paziente, puoi decidere se farlo peggiorare,migliorare o renderlo stabile, indipendentemente dalla storia clinica.
 
 ## VINCOLI DI OUTPUT (STRETTI)
 - Rispondi ESCLUSIVAMENTE con un oggetto JSON valido.
@@ -52,7 +53,29 @@ def post_data(data):
     
     if response.status_code != 200:
         raise Exception(f"Failed to post data: {response.status_code}")
-    
+
+def compute_derived_metrics(vitals: dict) -> dict:
+    """
+    Ricalcola le metriche derivate in modo deterministico a partire dai
+    segnali grezzi (eventualmente variati dall'LLM), così restano sempre
+    clinicamente coerenti con essi, indipendentemente da cosa ha
+    "inventato" il modello per quei campi.
+    """
+    try:
+        weight = float(vitals["Weight (kg)"])
+        height = float(vitals["Height (m)"])
+        sbp = float(vitals["Systolic Blood Pressure"])
+        dbp = float(vitals["Diastolic Blood Pressure"])
+
+        vitals["Derived_Pulse_Pressure"] = sbp - dbp
+        vitals["Derived_MAP"] = dbp + (sbp - dbp) / 3
+        vitals["Derived_BMI"] = weight / (height ** 2)
+
+    except (KeyError, TypeError, ValueError, ZeroDivisionError) as e:
+        logging.warning(f"Impossibile ricalcolare le metriche derivate: {e}")
+
+    return vitals
+
 def ask_llm(raw,report) -> dict:
     model = ChatGoogleGenerativeAI(model=GEMINI_API_MODEL, temperature=0.7)
     
@@ -67,6 +90,7 @@ def ask_llm(raw,report) -> dict:
         response = raw  
     logging.info(f"--- BATCH GENERATED ---")
     logging.info(f"Out ({error}): \n{response}")
+    response = compute_derived_metrics(response)
     response['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
     return response
 
@@ -80,7 +104,7 @@ async def generate_streaming_data():
             post_data(next)
         except Exception as e:
             logging.error(f"Failed to post data: {e}")
-        time.sleep(5)
+        await asyncio.sleep(5)
     
 if __name__ == "__main__":
     logging.log(logging.INFO, "Starting streaming data generation...")

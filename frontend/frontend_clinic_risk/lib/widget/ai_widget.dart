@@ -30,7 +30,7 @@ class _AiExplanationPanelState extends State<AiExplanationPanel> {
         if (_scrollCtrl.hasClients) {
           _scrollCtrl.animateTo(
             _scrollCtrl.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 80),
+            duration: const Duration(milliseconds: 20),
             curve: Curves.easeOut,
           );
         }

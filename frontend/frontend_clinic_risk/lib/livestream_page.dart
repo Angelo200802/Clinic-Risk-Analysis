@@ -7,7 +7,6 @@ import 'package:frontend_clinic_risk/widget/feature.dart';
 import 'package:frontend_clinic_risk/widget/radarchart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'dart:convert';
-import 'widget/classification_panel.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'widget/patient_card.dart';
 import 'types/trend.dart';
@@ -17,6 +16,7 @@ import 'widget/trend_graph.dart';
 import 'widget/iconbuttonrow.dart';
 import 'widget/circularsummary.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 const dynamic payload = {
   'sensor_update': {
@@ -281,6 +281,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                   return actualTime.difference(startTime).inMinutes > 5;
                 });
               });
+              _saveDataToLocal();
             } else if (data['type'] == 'ai_mex') {
               final int pid = data['patient_id'];
               final String full = data['text'] ?? '';
@@ -353,20 +354,44 @@ class _LivestreamPageState extends State<LivestreamPage> {
     });
   }
 
+  Future<void> _saveDataToLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Converte la mappa dei pazienti in JSON string
+    final patientsData = allPatients.map(
+      (key, record) => MapEntry(key.toString(), {
+        'sensorUpdate': record.sensorUpdate,
+        'index': record.index,
+        'pattern': record.pattern,
+      }),
+    );
+    await prefs.setString('cached_patients', jsonEncode(patientsData));
+  }
+
+  Future<void> _loadDataFromLocal() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? cachedData = prefs.getString('cached_patients');
+
+    if (cachedData != null) {
+      final Map<String, dynamic> decoded = jsonDecode(cachedData);
+      setState(() {
+        decoded.forEach((key, value) {
+          final int pid = int.parse(key);
+          allPatients[pid] = Record(
+            sensorUpdate: SensorUpdate.fromJson(value['sensorUpdate']),
+            index: CalculatedIndex.fromJson(value['index']),
+            pattern: Pattern.fromJson(value['pattern']),
+          );
+        });
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     debugPrint("Inizializzazione LivestreamPage...");
+    _loadDataFromLocal();
     _connect();
-    /*
-    allPatients[payload['sensor_update']['Patient ID']] = Record(
-      sensorUpdate: SensorUpdate.fromJson(payload['sensor_update']),
-      index: CalculatedIndex.fromJson(payload['index']),
-      pattern: Pattern.fromJson(payload['pattern']),
-    );
-    allTrends[payload['trend_update']['Patient ID']] = [
-      Trend.fromJson(payload['trend_update']),
-    ];*/
   }
 
   @override
@@ -376,38 +401,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
     _channel.sink.close();
     _reconnectTimer?.cancel();
     super.dispose();
-  }
-
-  Widget _buildStreamPanel() {
-    return Center(
-      child: _isConnected && _lastUpdate != null
-          ? LiveClassificationPane(
-              sensorUpdate: _lastUpdate!,
-              isConnected: _isConnected,
-            )
-          : LiveClassificationPane(
-              sensorUpdate: SensorUpdate(
-                patientId: 0,
-                heartRate: 0,
-                respiratoryRate: 0,
-                timestamp: '',
-                bodyTemperature: 0,
-                oxygenSaturation: 0,
-                systolicBloodPressure: 0,
-                diastolicBloodPressure: 0,
-                age: 0,
-                gender: '',
-                weight: 0,
-                height: 0,
-                derivedHrv: 0,
-                derivedPulsePressure: 0,
-                derivedBmi: 0,
-                derivedMap: 0,
-                prediction: "",
-              ),
-              isConnected: _isConnected ? false : _isConnected,
-            ),
-    );
   }
 
   Widget _buildEmptyChartPlaceholder() {
@@ -720,6 +713,13 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                                 trend:
                                                     allTrends[selectedPatientId]!
                                                         .last,
+                                                rpp:
+                                                    allPatients[selectedPatientId]!
+                                                        .index
+                                                        .ratePp,
+                                                pp: allPatients[selectedPatientId]!
+                                                    .index
+                                                    .ppIndex,
                                               )
                                             : _buildSimplePlaceholder(
                                                 "Seleziona paziente",
@@ -743,16 +743,55 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                         ),
                                       ),
                                       const Divider(color: Colors.white10),
+                                      // --- FIX: il radar veniva tagliato in alto (vertice "SI")
+                                      // perché AspectRatio calcolava l'altezza in base alla
+                                      // larghezza disponibile (spesso maggiore dello spazio
+                                      // verticale reale del pannello), e fl_chart disegna le
+                                      // etichette dei vertici leggermente oltre il bordo del
+                                      // poligono. Ora vincoliamo il radar a un quadrato basato
+                                      // sul lato PIÙ CORTO disponibile, con un margine
+                                      // riservato esplicitamente alle etichette: così l'intero
+                                      // grafico rientra sempre nella viewport, senza bisogno
+                                      // di scroll.
                                       selectedPatientId != null
                                           ? Expanded(
-                                              child: SingleChildScrollView(
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                child: ClinicalRadarChart(
-                                                  radarData: [
-                                                    addRiskCategory(),
-                                                  ],
-                                                ),
+                                              child: LayoutBuilder(
+                                                builder: (context, constraints) {
+                                                  const double labelPadding =
+                                                      28.0;
+                                                  final double side =
+                                                      (constraints.maxWidth <
+                                                              constraints
+                                                                  .maxHeight
+                                                          ? constraints.maxWidth
+                                                          : constraints
+                                                                .maxHeight) -
+                                                      labelPadding;
+
+                                                  return Center(
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            vertical:
+                                                                labelPadding /
+                                                                2,
+                                                          ),
+                                                      child: SizedBox(
+                                                        width: side > 0
+                                                            ? side
+                                                            : 0,
+                                                        height: side > 0
+                                                            ? side
+                                                            : 0,
+                                                        child: ClinicalRadarChart(
+                                                          radarData: [
+                                                            addRiskCategory(),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
                                               ),
                                             )
                                           : _buildSimplePlaceholder(

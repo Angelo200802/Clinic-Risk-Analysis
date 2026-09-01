@@ -6,6 +6,25 @@ class ClinicalRadarChart extends StatelessWidget {
 
   const ClinicalRadarChart({super.key, required this.radarData});
 
+  // Definizione centralizzata di etichetta + chiave dati per ogni vertice,
+  // così l'ordine resta sincronizzato tra assi e valori mostrati.
+  static const List<Map<String, String>> _vertexDefs = [
+    {'label': 'SI', 'key': 'Avg_ShockIndex'},
+    {'label': 'MSI', 'key': 'Avg_ModifiedShockIndex'},
+    {'label': 'AgeSI', 'key': 'Avg_AgeShockIndex_Norm'},
+    {'label': 'DSI', 'key': 'Avg_DiastolicShockIndex'},
+    {'label': 'PPI', 'key': 'Avg_PulsePressureIndex'},
+  ];
+
+  String _formatValue(dynamic data, String key) {
+    if (data == null || data is! Map || data.isEmpty || data[key] == null) {
+      return '-';
+    }
+    final v = data[key];
+    if (v is num) return v.toDouble().toStringAsFixed(2);
+    return v.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     dynamic highRisk;
@@ -25,6 +44,7 @@ class ClinicalRadarChart extends StatelessWidget {
     } catch (e) {
       lowRisk = {};
     }
+
     List<RadarDataSet> dataSets = [];
     if (highRisk.isNotEmpty) {
       dataSets.add(
@@ -38,7 +58,6 @@ class ClinicalRadarChart extends StatelessWidget {
       );
     }
     if (lowRisk.isNotEmpty) {
-      // Dataset Low Risk - Blu
       dataSets.add(
         RadarDataSet(
           fillColor: Colors.greenAccent.withOpacity(0.3),
@@ -49,41 +68,37 @@ class ClinicalRadarChart extends StatelessWidget {
         ),
       );
     }
+
     return AspectRatio(
       aspectRatio: 1.3,
       child: RadarChart(
         RadarChartData(
           radarShape: RadarShape.polygon,
-
           radarBorderData: const BorderSide(color: Colors.white24, width: 1),
           gridBorderData: const BorderSide(color: Colors.white10, width: 1),
           tickBorderData: const BorderSide(color: Colors.white10, width: 1),
           ticksTextStyle: const TextStyle(color: Colors.white54, fontSize: 10),
-
-          // Impostiamo il numero di cerchi della griglia
           tickCount: 5,
-
           dataSets: dataSets,
 
-          // Configurazione etichette sui vertici
+          // Etichette sui vertici: nome + valore per High Risk / Low Risk
           getTitle: (index, angle) {
-            final double usedAngle = angle;
-            switch (index) {
-              case 0:
-                return RadarChartTitle(text: 'SI', angle: usedAngle);
-              case 1:
-                return RadarChartTitle(text: 'MSI', angle: usedAngle);
-              case 2:
-                return RadarChartTitle(text: 'AgeSI', angle: usedAngle);
-              case 3:
-                return RadarChartTitle(text: 'DSI', angle: usedAngle);
-              case 4:
-                return RadarChartTitle(text: 'PPI', angle: usedAngle);
-              default:
-                return const RadarChartTitle(text: '');
+            if (index < 0 || index >= _vertexDefs.length) {
+              return const RadarChartTitle(text: '');
             }
+            final def = _vertexDefs[index];
+            final label = def['label']!;
+            final key = def['key']!;
+
+            final hrVal = _formatValue(highRisk, key);
+            final lrVal = _formatValue(lowRisk, key);
+
+            return RadarChartTitle(
+              text: '$label\nHR $hrVal · LR $lrVal',
+              angle: angle,
+            );
           },
-          titleTextStyle: const TextStyle(color: Colors.white, fontSize: 12),
+          titleTextStyle: const TextStyle(color: Colors.white, fontSize: 11),
         ),
       ),
     );

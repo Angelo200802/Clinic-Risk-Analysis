@@ -68,8 +68,13 @@ class CircularSummary extends StatelessWidget {
 
 class CircularSummaryPanel extends StatelessWidget {
   final Trend trend;
-
-  const CircularSummaryPanel({super.key, required this.trend});
+  final double rpp, pp;
+  const CircularSummaryPanel({
+    super.key,
+    required this.trend,
+    required this.rpp,
+    required this.pp,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -94,11 +99,6 @@ class CircularSummaryPanel extends StatelessWidget {
                 color: Colors.orangeAccent,
               ),
               const SizedBox(width: 20),
-              CircularSummary(
-                title: "HRV",
-                value: trend.avgHrv,
-                color: Colors.blueAccent,
-              ),
             ],
           ),
           const SizedBox(width: 20),
@@ -128,6 +128,51 @@ class CircularSummaryPanel extends StatelessWidget {
                 ],
               ),
               const SizedBox(width: 40),
+              Column(
+                children: [
+                  Text(
+                    "PP INDEX",
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    pp.toStringAsFixed(2),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 40),
+              Column(
+                children: [
+                  Text(
+                    "RPP",
+                    style: const TextStyle(
+                      fontSize: 9,
+                      color: Colors.white54,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    rpp.toStringAsFixed(2),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      letterSpacing: 1.1,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ],

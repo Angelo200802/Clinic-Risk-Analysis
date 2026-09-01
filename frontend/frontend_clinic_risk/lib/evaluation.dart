@@ -176,6 +176,14 @@ class _EvaluationPageState extends State<EvaluationPage> {
                   DataColumn(
                     label: Expanded(
                       child: Text(
+                        'F1 SCORE',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Expanded(
+                      child: Text(
                         'ROC AUC',
                         style: TextStyle(color: Colors.white70),
                       ),
@@ -210,6 +218,12 @@ class _EvaluationPageState extends State<EvaluationPage> {
                       DataCell(
                         Text(
                           "${(stats['recall'] * 100).toStringAsFixed(1)}%",
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          "${(stats['f1_score'] * 100).toStringAsFixed(1)}%",
                           style: const TextStyle(color: Colors.white),
                         ),
                       ),
