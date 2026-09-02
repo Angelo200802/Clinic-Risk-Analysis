@@ -39,7 +39,7 @@ ann = MultilayerPerceptronClassifier(
     featuresCol="last_features",
     blockSize=128,
     seed=42,
-    solver="l-bfgs" # Ottimizzatore basato sulla discesa del gradiente
+    solver="l-bfgs" 
 )
 
 # 4. Pipeline

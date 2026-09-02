@@ -1,6 +1,5 @@
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from pyspark.sql.types import Row, StructType, StructField,IntegerType, DoubleType, StringType
-from pyspark.sql import Window
 import pyspark.sql.functions as F
 from pyspark.sql.functions import col, window
 from redis import Redis
@@ -278,10 +277,7 @@ def batch_job_stats(df_stats: DataFrame, batch_id):
     count = df_stats.count()
     if count > 0:
         rows = df_stats.collect()
-        # Ordina per paziente e poi per inizio finestra: un batch puo'
-        # contenere piu' righe per lo stesso paziente (finestre sovrapposte),
-        # e vanno processate in ordine cronologico per aggiornare
-        # correttamente il buffer di storico su Redis.
+
         rows_sorted = sorted(rows, key=lambda r: (r["Patient ID"], r["window"].start))
  
         for row in rows_sorted:
