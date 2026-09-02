@@ -204,132 +204,82 @@ class Record {
   });
 }
 
-class _LivestreamPageState extends State<LivestreamPage> {
-  late WebSocketChannel _channel;
+class LivestreamDataService extends ChangeNotifier {
+  LivestreamDataService._internal();
+  static final LivestreamDataService instance =
+      LivestreamDataService._internal();
+
+  WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
-  bool _isConnected = false;
-  bool _isConnecting = false;
+  bool _initialized = false;
+
+  bool isConnected = false;
+  bool isConnecting = false;
+
   Map<int, Record> allPatients = {};
   Map<int, List<Trend>> allTrends = {};
-  SensorUpdate? _lastUpdate;
+  // JSON grezzo dei trend, usato solo per la persistenza su disco
+  final Map<int, List<Map<String, dynamic>>> _rawTrends = {};
+
   int? selectedPatientId;
-  String label = "Heart Rate";
-  bool _showAiPanel = false;
-  final Map<int, StringBuffer> _aiStreams = {}; // buffer per paziente
-  final Map<int, String> _aiResponses = {}; // risposta completa finale
-  bool _aiStreaming = false;
+
+  final Map<int, StringBuffer> aiStreams = {};
+  final Map<int, String> aiResponses = {};
+  bool aiStreaming = false;
   Timer? _aiTypingTimer;
   int _aiTypingIndex = 0;
   String _aiFullText = '';
 
-  Future<Map<String, dynamic>> _requestAiExplanation(int patientId) async {
-    final uri = Uri.parse('http://localhost:8081/explain/$patientId');
+  /// Idempotente: se il servizio è già connesso/inizializzato, non fa nulla.
+  /// Questo è il punto chiave che risolve il problema: chiamarlo di nuovo
+  /// quando l'utente torna sulla pagina NON riavvia la connessione né
+  /// azzera i dati già raccolti.
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+    await _loadDataFromLocal();
+    _connect();
+  }
+
+  void selectPatient(int? id) {
+    selectedPatientId = id;
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> requestAiExplanation(int patientId) async {
+    // Spostato qui solo per coerenza; se preferisci lascialo nella pagina.
+    final uri = Uri.parse(
+      'http://clinc-risk-analysis-1:8081/explain/$patientId',
+    );
     final response = await http.get(uri);
     return jsonDecode(response.body);
   }
 
   void _connect() async {
-    if (!mounted || _isConnecting) return;
-
-    setState(() {
-      _isConnecting = true;
-    });
+    if (isConnecting) return;
+    isConnecting = true;
+    notifyListeners();
 
     try {
       _channel = WebSocketChannel.connect(
         Uri.parse(dotenv.env['WS_STREAMING']!),
       );
+      await _channel!.ready;
 
-      await _channel.ready;
+      isConnected = true;
+      isConnecting = false;
+      notifyListeners();
 
-      if (mounted) {
-        setState(() {
-          _isConnected = true;
-          _isConnecting = false;
-        });
-      }
-
-      _subscription = _channel.stream.listen(
-        (message) {
-          try {
-            final data = jsonDecode(message);
-            debugPrint("Tipo messaggio: ${data['type']}");
-            if (data['type'] == 'update') {
-              SensorUpdate sensorUpdate = SensorUpdate.fromJson(
-                data['sensor_update'],
-              );
-              CalculatedIndex index = CalculatedIndex.fromJson(data['index']);
-              Pattern pattern = Pattern.fromJson(data['pattern']);
-              setState(() {
-                allPatients[sensorUpdate.patientId] = Record(
-                  sensorUpdate: sensorUpdate,
-                  index: index,
-                  pattern: pattern,
-                );
-                _lastUpdate = sensorUpdate;
-              });
-
-              Trend trend = Trend.fromJson(data['trend_update']);
-
-              setState(() {
-                allTrends[trend.patientId] = allTrends[trend.patientId] ?? [];
-                allTrends[trend.patientId]!.add(trend);
-                DateTime actualTime = DateTime.parse(trend.start);
-                allTrends[trend.patientId]?.removeWhere((t) {
-                  DateTime startTime = DateTime.parse(t.start);
-                  return actualTime.difference(startTime).inMinutes > 5;
-                });
-              });
-              _saveDataToLocal();
-            } else if (data['type'] == 'ai_mex') {
-              final int pid = data['patient_id'];
-              final String full = data['text'] ?? '';
-
-              // Cancella eventuale animazione precedente
-              _aiTypingTimer?.cancel();
-              _aiTypingIndex = 0;
-              _aiFullText = full;
-
-              setState(() {
-                _aiStreams[pid] = StringBuffer();
-                _aiResponses.remove(pid);
-                _aiStreaming = true;
-                _showAiPanel = true;
-              });
-
-              // Simula typing locale
-              _aiTypingTimer = Timer.periodic(
-                const Duration(milliseconds: 15),
-                (_) {
-                  if (_aiTypingIndex < _aiFullText.length) {
-                    setState(() {
-                      _aiStreams[pid]!.write(_aiFullText[_aiTypingIndex]);
-                      _aiTypingIndex++;
-                    });
-                  } else {
-                    _aiTypingTimer?.cancel();
-                    _aiTypingTimer = null;
-                    setState(() {
-                      _aiResponses[pid] = _aiFullText;
-                      _aiStreams[pid]?.clear();
-                      _aiStreaming = false;
-                    });
-                  }
-                },
-              );
-            }
-          } catch (e) {
-            debugPrint("Parsing error: $e");
-          }
-        },
+      _subscription = _channel!.stream.listen(
+        _onMessage,
         onDone: () {
           debugPrint("WebSocket chiuso dal server");
-          if (mounted) _handleRetry();
+          _handleRetry();
         },
         onError: (error) {
           debugPrint("Errore WebSocket: $error");
-          if (mounted) _handleRetry();
+          _handleRetry();
         },
       );
     } catch (e) {
@@ -338,25 +288,87 @@ class _LivestreamPageState extends State<LivestreamPage> {
     }
   }
 
+  void _onMessage(dynamic message) {
+    try {
+      final data = jsonDecode(message);
+      if (data['type'] == 'update') {
+        final sensorUpdate = SensorUpdate.fromJson(data['sensor_update']);
+        final index = CalculatedIndex.fromJson(data['index']);
+        final pattern = Pattern.fromJson(data['pattern']);
+
+        allPatients[sensorUpdate.patientId] = Record(
+          sensorUpdate: sensorUpdate,
+          index: index,
+          pattern: pattern,
+        );
+
+        final trendJson = data['trend_update'] as Map<String, dynamic>;
+        final trend = Trend.fromJson(trendJson);
+        final pid = trend.patientId;
+
+        allTrends[pid] = allTrends[pid] ?? [];
+        allTrends[pid]!.add(trend);
+        _rawTrends[pid] = _rawTrends[pid] ?? [];
+        _rawTrends[pid]!.add(trendJson);
+
+        final actualTime = DateTime.parse(trend.start);
+        bool isOld(String start) =>
+            actualTime.difference(DateTime.parse(start)).inMinutes > 5;
+
+        allTrends[pid]?.removeWhere((t) => isOld(t.start));
+        _rawTrends[pid]?.removeWhere((t) => isOld(t['start']));
+
+        notifyListeners();
+        _saveDataToLocal();
+      } else if (data['type'] == 'ai_mex') {
+        _handleAiMessage(data);
+      }
+    } catch (e) {
+      debugPrint("Parsing error: $e");
+    }
+  }
+
+  void _handleAiMessage(Map<String, dynamic> data) {
+    final int pid = data['patient_id'];
+    final String full = data['text'] ?? '';
+
+    _aiTypingTimer?.cancel();
+    _aiTypingIndex = 0;
+    _aiFullText = full;
+
+    aiStreams[pid] = StringBuffer();
+    aiResponses.remove(pid);
+    aiStreaming = true;
+    notifyListeners();
+
+    _aiTypingTimer = Timer.periodic(const Duration(milliseconds: 15), (_) {
+      if (_aiTypingIndex < _aiFullText.length) {
+        aiStreams[pid]!.write(_aiFullText[_aiTypingIndex]);
+        _aiTypingIndex++;
+        notifyListeners();
+      } else {
+        _aiTypingTimer?.cancel();
+        _aiTypingTimer = null;
+        aiResponses[pid] = _aiFullText;
+        aiStreams[pid]?.clear();
+        aiStreaming = false;
+        notifyListeners();
+      }
+    });
+  }
+
   void _handleRetry() {
-    if (!mounted) return;
+    isConnected = false;
+    isConnecting = false;
+    notifyListeners();
 
-    setState(() {
-      _isConnected = false;
-      _isConnecting = false;
-    });
-
-    // Annulla eventuali timer precedenti e ne avvia uno nuovo
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
-      debugPrint("Tentativo di riconnessione in corso...");
-      if (mounted) _connect();
-    });
+    _reconnectTimer = Timer(const Duration(seconds: 5), _connect);
   }
 
   Future<void> _saveDataToLocal() async {
     final prefs = await SharedPreferences.getInstance();
-    // Converte la mappa dei pazienti in JSON string
+
     final patientsData = allPatients.map(
       (key, record) => MapEntry(key.toString(), {
         'sensorUpdate': record.sensorUpdate,
@@ -365,41 +377,73 @@ class _LivestreamPageState extends State<LivestreamPage> {
       }),
     );
     await prefs.setString('cached_patients', jsonEncode(patientsData));
+
+    final trendsData = _rawTrends.map((k, v) => MapEntry(k.toString(), v));
+    await prefs.setString('cached_trends', jsonEncode(trendsData));
   }
 
   Future<void> _loadDataFromLocal() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? cachedData = prefs.getString('cached_patients');
 
-    if (cachedData != null) {
-      final Map<String, dynamic> decoded = jsonDecode(cachedData);
-      setState(() {
-        decoded.forEach((key, value) {
-          final int pid = int.parse(key);
-          allPatients[pid] = Record(
-            sensorUpdate: SensorUpdate.fromJson(value['sensorUpdate']),
-            index: CalculatedIndex.fromJson(value['index']),
-            pattern: Pattern.fromJson(value['pattern']),
-          );
-        });
+    final String? cachedPatients = prefs.getString('cached_patients');
+    if (cachedPatients != null) {
+      final Map<String, dynamic> decoded = jsonDecode(cachedPatients);
+      decoded.forEach((key, value) {
+        final int pid = int.parse(key);
+        allPatients[pid] = Record(
+          sensorUpdate: SensorUpdate.fromJson(value['sensorUpdate']),
+          index: CalculatedIndex.fromJson(value['index']),
+          pattern: Pattern.fromJson(value['pattern']),
+        );
       });
     }
+
+    final String? cachedTrends = prefs.getString('cached_trends');
+    if (cachedTrends != null) {
+      final Map<String, dynamic> decoded = jsonDecode(cachedTrends);
+      decoded.forEach((key, value) {
+        final int pid = int.parse(key);
+        final list = (value as List).cast<Map<String, dynamic>>();
+        _rawTrends[pid] = list;
+        allTrends[pid] = list.map((t) => Trend.fromJson(t)).toList();
+      });
+    }
+
+    notifyListeners();
   }
 
+  /// Da chiamare SOLO alla chiusura reale dell'app (es. in un listener
+  /// di lifecycle globale), mai dal dispose() di una singola pagina.
+  void shutdown() {
+    _aiTypingTimer?.cancel();
+    _subscription?.cancel();
+    _channel?.sink.close();
+    _reconnectTimer?.cancel();
+  }
+}
+
+class _LivestreamPageState extends State<LivestreamPage> {
+  final LivestreamDataService _service = LivestreamDataService.instance;
+
+  bool _showAiPanel = false; // resta locale: è solo UI della pagina, non dato
+  String label = "Heart Rate";
   @override
   void initState() {
     super.initState();
     debugPrint("Inizializzazione LivestreamPage...");
-    _loadDataFromLocal();
-    _connect();
+    _service.init(); // no-op se già connesso: niente reset
+    _service.addListener(_onServiceUpdate);
+  }
+
+  void _onServiceUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _aiTypingTimer?.cancel();
-    _subscription?.cancel();
-    _channel.sink.close();
-    _reconnectTimer?.cancel();
+    _service.removeListener(_onServiceUpdate);
+    // NIENTE _channel.sink.close() qui: il websocket deve restare
+    // vivo anche quando l'utente lascia la pagina.
     super.dispose();
   }
 
@@ -427,7 +471,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   Widget _buildChart() {
-    final selectedPatient = allPatients[selectedPatientId]?.sensorUpdate;
+    final selectedPatient =
+        _service.allPatients[_service.selectedPatientId]?.sensorUpdate;
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -514,7 +559,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
               padding: const EdgeInsets.fromLTRB(15, 20, 20, 10),
               child: selectedPatient != null
                   ? PatientTrendChart(
-                      history: allTrends[selectedPatientId] ?? [],
+                      history:
+                          _service.allTrends[_service.selectedPatientId] ?? [],
                       lineColor: chartAttributes
                           .firstWhere((attr) => attr['label'] == label)['color']
                           .withOpacity(0.8),
@@ -530,10 +576,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   Widget _buildAiPanel() {
     return AiExplanationPanel(
-      patientId: selectedPatientId,
-      streamingText: _aiStreams[selectedPatientId]?.toString() ?? '',
-      completedText: _aiResponses[selectedPatientId],
-      isStreaming: _aiStreaming,
+      patientId: _service.selectedPatientId,
+      streamingText:
+          _service.aiStreams[_service.selectedPatientId]?.toString() ?? '',
+      completedText: _service.aiResponses[_service.selectedPatientId],
+      isStreaming: _service.aiStreaming,
     );
   }
 
@@ -567,18 +614,27 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   dynamic addRiskCategory() {
-    String riskCategory =
-        allPatients[selectedPatientId]!.sensorUpdate.prediction;
+    String riskCategory = _service
+        .allPatients[_service.selectedPatientId]!
+        .sensorUpdate
+        .prediction;
     return {
       "Risk Category": riskCategory,
-      "Avg_ShockIndex": allPatients[selectedPatientId]!.index.shockIndex,
-      "Avg_ModifiedShockIndex":
-          allPatients[selectedPatientId]!.index.modifiedShockIndex,
+      "Avg_ShockIndex":
+          _service.allPatients[_service.selectedPatientId]!.index.shockIndex,
+      "Avg_ModifiedShockIndex": _service
+          .allPatients[_service.selectedPatientId]!
+          .index
+          .modifiedShockIndex,
       "Avg_AgeShockIndex_Norm":
-          allPatients[selectedPatientId]!.index.ageIndex / 100,
-      "Avg_DiastolicShockIndex":
-          allPatients[selectedPatientId]!.index.diastolicShockIndex,
-      "Avg_PulsePressureIndex": allPatients[selectedPatientId]!.index.ppIndex,
+          _service.allPatients[_service.selectedPatientId]!.index.ageIndex /
+          100,
+      "Avg_DiastolicShockIndex": _service
+          .allPatients[_service.selectedPatientId]!
+          .index
+          .diastolicShockIndex,
+      "Avg_PulsePressureIndex":
+          _service.allPatients[_service.selectedPatientId]!.index.ppIndex,
     };
   }
 
@@ -605,49 +661,53 @@ class _LivestreamPageState extends State<LivestreamPage> {
                         Expanded(
                           child: buildGlassPanel(child: _buildAiPanel()),
                         ),
-                        if (selectedPatientId != null) ...[
+                        if (_service.selectedPatientId != null) ...[
                           const SizedBox(height: 8),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: ElevatedButton.icon(
                               onPressed: () async {
                                 setState(() {
-                                  _aiStreaming = true;
+                                  _service.aiStreaming = true;
                                   _showAiPanel = true;
                                 });
 
-                                final data = await _requestAiExplanation(
-                                  selectedPatientId!,
-                                );
+                                final data = await _service
+                                    .requestAiExplanation(
+                                      _service.selectedPatientId!,
+                                    );
                                 final int pid = data['patient_id'];
                                 final String full = data['message'] ?? '';
 
-                                _aiTypingTimer?.cancel();
-                                _aiTypingIndex = 0;
-                                _aiFullText = full;
+                                _service._aiTypingTimer?.cancel();
+                                _service._aiTypingIndex = 0;
+                                _service._aiFullText = full;
 
                                 setState(() {
-                                  _aiStreams[pid] = StringBuffer();
-                                  _aiResponses.remove(pid);
+                                  _service.aiStreams[pid] = StringBuffer();
+                                  _service.aiResponses.remove(pid);
                                 });
 
-                                _aiTypingTimer = Timer.periodic(
+                                _service._aiTypingTimer = Timer.periodic(
                                   const Duration(milliseconds: 15),
                                   (_) {
-                                    if (_aiTypingIndex < _aiFullText.length) {
+                                    if (_service._aiTypingIndex <
+                                        _service._aiFullText.length) {
                                       setState(() {
-                                        _aiStreams[pid]!.write(
-                                          _aiFullText[_aiTypingIndex],
+                                        _service.aiStreams[pid]!.write(
+                                          _service._aiFullText[_service
+                                              ._aiTypingIndex],
                                         );
-                                        _aiTypingIndex++;
+                                        _service._aiTypingIndex++;
                                       });
                                     } else {
-                                      _aiTypingTimer?.cancel();
-                                      _aiTypingTimer = null;
+                                      _service._aiTypingTimer?.cancel();
+                                      _service._aiTypingTimer = null;
                                       setState(() {
-                                        _aiResponses[pid] = _aiFullText;
-                                        _aiStreams[pid]?.clear();
-                                        _aiStreaming = false;
+                                        _service.aiResponses[pid] =
+                                            _service._aiFullText;
+                                        _service.aiStreams[pid]?.clear();
+                                        _service.aiStreaming = false;
                                       });
                                     }
                                   },
@@ -705,19 +765,26 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                       const Divider(color: Colors.white10),
                                       Expanded(
                                         child:
-                                            selectedPatientId != null &&
-                                                allTrends[selectedPatientId]
+                                            _service.selectedPatientId !=
+                                                    null &&
+                                                _service
+                                                        .allTrends[_service
+                                                            .selectedPatientId]
                                                         ?.isNotEmpty ==
                                                     true
                                             ? CircularSummaryPanel(
-                                                trend:
-                                                    allTrends[selectedPatientId]!
-                                                        .last,
-                                                rpp:
-                                                    allPatients[selectedPatientId]!
-                                                        .index
-                                                        .ratePp,
-                                                pp: allPatients[selectedPatientId]!
+                                                trend: _service
+                                                    .allTrends[_service
+                                                        .selectedPatientId]!
+                                                    .last,
+                                                rpp: _service
+                                                    .allPatients[_service
+                                                        .selectedPatientId]!
+                                                    .index
+                                                    .ratePp,
+                                                pp: _service
+                                                    .allPatients[_service
+                                                        .selectedPatientId]!
                                                     .index
                                                     .ppIndex,
                                               )
@@ -753,7 +820,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                       // riservato esplicitamente alle etichette: così l'intero
                                       // grafico rientra sempre nella viewport, senza bisogno
                                       // di scroll.
-                                      selectedPatientId != null
+                                      _service.selectedPatientId != null
                                           ? Expanded(
                                               child: LayoutBuilder(
                                                 builder: (context, constraints) {
@@ -829,12 +896,17 @@ class _LivestreamPageState extends State<LivestreamPage> {
                                               const BouncingScrollPhysics(),
                                           child: FeaturePanel(
                                             insights:
-                                                (selectedPatientId != null &&
-                                                    allTrends[selectedPatientId]
+                                                (_service.selectedPatientId !=
+                                                        null &&
+                                                    _service
+                                                            .allTrends[_service
+                                                                .selectedPatientId]
                                                             ?.isNotEmpty ==
                                                         true)
                                                 ? getFeatureInsights(
-                                                    allTrends[selectedPatientId]!
+                                                    _service
+                                                        .allTrends[_service
+                                                            .selectedPatientId]!
                                                         .last,
                                                   )
                                                 : [],
@@ -849,19 +921,27 @@ class _LivestreamPageState extends State<LivestreamPage> {
                               Expanded(
                                 child: _buildRiskBadgesPanel({
                                   "hemo_deterioration":
-                                      selectedPatientId == null
+                                      _service.selectedPatientId == null
                                       ? false
-                                      : allPatients[selectedPatientId]
+                                      : _service
+                                            .allPatients[_service
+                                                .selectedPatientId]
                                             ?.pattern
                                             .hemoDeterioration,
-                                  "resp_failure": selectedPatientId == null
+                                  "resp_failure":
+                                      _service.selectedPatientId == null
                                       ? false
-                                      : allPatients[selectedPatientId]
+                                      : _service
+                                            .allPatients[_service
+                                                .selectedPatientId]
                                             ?.pattern
                                             .progRespFailure,
-                                  "dynamic_sepsis": selectedPatientId == null
+                                  "dynamic_sepsis":
+                                      _service.selectedPatientId == null
                                       ? false
-                                      : allPatients[selectedPatientId]
+                                      : _service
+                                            .allPatients[_service
+                                                .selectedPatientId]
                                             ?.pattern
                                             .dynamicSepsis,
                                 }),
@@ -889,12 +969,13 @@ class _LivestreamPageState extends State<LivestreamPage> {
                     flex: 1,
                     child: buildGlassPanel(
                       child: TriageMasterView(
-                        allPatients: allPatients.map(
+                        allPatients: _service.allPatients.map(
                           (key, value) => MapEntry(key, value.sensorUpdate),
                         ),
-                        selectedPatientId: selectedPatientId,
-                        onPatientSelected: (p) =>
-                            setState(() => selectedPatientId = p.patientId),
+                        selectedPatientId: _service.selectedPatientId,
+                        onPatientSelected: (p) => setState(
+                          () => _service.selectedPatientId = p.patientId,
+                        ),
                       ),
                     ),
                   ),

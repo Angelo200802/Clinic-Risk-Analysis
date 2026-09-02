@@ -13,17 +13,17 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv 
 from fastapi import WebSocket
 import bus, json
-
+ 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 GEMINI_API_MODEL = os.getenv("GEMINI_API_MODEL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
+ 
 redis_db = Redis(host=os.getenv("REDIS_HOST"), port=int(os.getenv("REDIS_PORT")), db=0)
 ensemble = Ensemble()
 router_streaming = APIRouter()
-
-
+ 
+ 
 columns = [
     "Heart Rate",
     "Respiratory Rate",
@@ -41,7 +41,7 @@ columns = [
     "Derived_MAP",
     "Prediction"
 ]
-
+ 
 class VitalSigns(BaseModel):
     patient_id : int = Field(alias="Patient ID")
     heart_rate : int = Field(alias="Heart Rate")
@@ -62,7 +62,7 @@ class VitalSigns(BaseModel):
     risk_category : str = Field(default= None, alias="Risk Category")
     
 df = load_dataset(os.getenv("DATASET_PATH"))
-
+ 
 schema = StructType([
     StructField("Patient ID", IntegerType(), True),
     StructField("Heart Rate", IntegerType(), True),
@@ -82,7 +82,7 @@ schema = StructType([
     StructField("Derived_MAP", DoubleType(), True),
     StructField("Risk Category", StringType(), True)
 ])
-
+ 
 def save_to_redis(row : dict):
     patient_id = row['sensor_update']['Patient ID']
     history_key = f"patient_history:{patient_id}"
@@ -93,7 +93,7 @@ def save_to_redis(row : dict):
     pipe.ltrim(history_key, 0, 10)
     pipe.execute()
     logging.info(f"Dati salvati per Patient ID {patient_id} su Redis.")
-
+ 
 def send_update(update_row: Row):
     dict_row = update_row.asDict()
     dict_row['start'] = dict_row['window'].start.isoformat()
@@ -133,147 +133,166 @@ def send_update(update_row: Row):
     )
     logging.info(f"Trend calcolato per Patient ID {update_row['sensor_update']['Patient ID']}\n {update_row}")
     return update_row
-
-
-def batch_job_stats(df_stats : DataFrame, batch_id): 
+ 
+ 
+TREND_HISTORY_PREFIX = "patient_trend_buffer"
+MAX_HISTORY = 3 
+ 
+HR_DELTA_MIN = 2.0
+MAP_DELTA_MIN = 2.0
+RR_DELTA_MIN = 1.0
+SPO2_DELTA_MIN = 0.5
+HRV_DELTA_MIN = 0.005
+ 
+ 
+def _load_trend_buffer(patient_id: int) -> list:
+    raw = redis_db.get(f"{TREND_HISTORY_PREFIX}:{patient_id}")
+    return json.loads(raw) if raw else []
+ 
+ 
+def _save_trend_buffer(patient_id: int, buffer: list):
+    redis_db.set(f"{TREND_HISTORY_PREFIX}:{patient_id}", json.dumps(buffer))
+ 
+ 
+def _hist(buffer: list, field: str, n: int):
+    """n=1 -> valore al passo precedente, n=2 -> due passi indietro."""
+    idx = len(buffer) - 1 - n
+    return buffer[idx][field] if idx >= 0 else None
+ 
+ 
+def _pct(curr, prev):
+    if curr is None or prev is None or prev == 0:
+        return None
+    return (curr - prev) / prev * 100
+ 
+ 
+def _rising(curr, prev, prev_lag, min_delta):
+    return (
+        prev is not None and prev_lag is not None and
+        (curr - prev) > min_delta and (prev - prev_lag) > min_delta
+    )
+ 
+ 
+def _falling(curr, prev, prev_lag, min_delta):
+    return (
+        prev is not None and prev_lag is not None and
+        (prev - curr) > min_delta and (prev_lag - prev) > min_delta
+    )
+ 
+ 
+def compute_trend_row(row: Row) -> dict:
+    """
+    Calcola pct/pattern per una singola riga aggregata (Patient ID + finestra),
+    usando lo storico del paziente letto da Redis invece che un Window().lag()
+    limitato al solo micro-batch corrente.
+    """
+    patient_id = row["Patient ID"]
+    w_start = row["window"].start.isoformat()
+ 
+    buffer = _load_trend_buffer(patient_id)
+ 
+    point = {
+        "window_start": w_start,
+        "avg_hr": float(row["avg_hr"]),
+        "avg_map": float(row["avg_map"]),
+        "avg_rr": float(row["avg_rr"]),
+        "avg_spo2": float(row["avg_spo2"]),
+        "avg_hrv": float(row["avg_hrv"]),
+        "avg_pp": float(row["avg_pp"]),
+    }
+ 
+    if buffer and buffer[-1]["window_start"] == w_start:
+        buffer[-1] = point
+    else:
+        buffer.append(point)
+        buffer = buffer[-MAX_HISTORY:]
+ 
+    prev_hr, prev_hr_lag = _hist(buffer, "avg_hr", 1), _hist(buffer, "avg_hr", 2)
+    prev_map, prev_map_lag = _hist(buffer, "avg_map", 1), _hist(buffer, "avg_map", 2)
+    prev_rr, prev_rr_lag = _hist(buffer, "avg_rr", 1), _hist(buffer, "avg_rr", 2)
+    prev_spo2, prev_spo2_lag = _hist(buffer, "avg_spo2", 1), _hist(buffer, "avg_spo2", 2)
+    prev_hrv, prev_hrv_lag = _hist(buffer, "avg_hrv", 1), _hist(buffer, "avg_hrv", 2)
+    prev_pp = _hist(buffer, "avg_pp", 1)
+ 
+    avg_hr, avg_map = point["avg_hr"], point["avg_map"]
+    avg_rr, avg_spo2 = point["avg_rr"], point["avg_spo2"]
+    avg_hrv, avg_pp = point["avg_hrv"], point["avg_pp"]
+    avg_temp = row["avg_temp"]
+ 
+    hemo_pattern = int(
+        _rising(avg_hr, prev_hr, prev_hr_lag, HR_DELTA_MIN) and
+        _falling(avg_map, prev_map, prev_map_lag, MAP_DELTA_MIN)
+    )
+    resp_pattern = int(
+        _rising(avg_rr, prev_rr, prev_rr_lag, RR_DELTA_MIN) and
+        _falling(avg_spo2, prev_spo2, prev_spo2_lag, SPO2_DELTA_MIN)
+    )
+    sepsis_pattern = int(
+        avg_temp is not None and avg_temp > 38 and
+        _rising(avg_hr, prev_hr, prev_hr_lag, HR_DELTA_MIN) and
+        _falling(avg_hrv, prev_hrv, prev_hrv_lag, HRV_DELTA_MIN)
+    )
+ 
+    bmi = row["Derived_BMI"]
+    bmi_class = (
+        "UNDERWEIGHT" if bmi < 18.5 else
+        "NORMAL" if bmi < 25 else
+        "OVERWEIGHT" if bmi < 30 else
+        "OBESE"
+    )
+ 
+    sbp, dbp = row["avg_sbp"], row["avg_dbp"]
+    shock_index = avg_hr / sbp if sbp else None
+    modified_shock_index = avg_hr / avg_map if avg_map else None
+    age_index = row["Age"] * shock_index if shock_index is not None else None
+    diastolic_shock_index = avg_hr / dbp if dbp else None
+    rate_pp = sbp * avg_hr if sbp else None
+    pp_index = avg_pp / avg_hr if avg_hr else None
+ 
+    dict_row = row.asDict()
+    dict_row.update({
+        "bmi_class": bmi_class,
+        "hr_pct": _pct(avg_hr, prev_hr),
+        "rr_pct": _pct(avg_rr, prev_rr),
+        "spo2_pct": _pct(avg_spo2, prev_spo2),
+        "pp_pct": _pct(avg_pp, prev_pp),
+        "map_pct": _pct(avg_map, prev_map),
+        "progressive_hemo_deterioration": hemo_pattern,
+        "progressive_resp_failure_pattern": resp_pattern,
+        "dynamic_sepsis_pattern": sepsis_pattern,
+        "shock_index": shock_index,
+        "modified_shock_index": modified_shock_index,
+        "age_index": age_index,
+        "diastolic_shock_index": diastolic_shock_index,
+        "rate_pp": rate_pp,
+        "pp_index": pp_index,
+    })
+ 
+    _save_trend_buffer(patient_id, buffer)
+ 
+    return dict_row
+ 
+ 
+def batch_job_stats(df_stats: DataFrame, batch_id):
     df_stats.show()
     count = df_stats.count()
     if count > 0:
-        patient_window = Window.partitionBy("Patient ID").orderBy("window.start")
-
-        df_with_trend = (
-            df_stats
-            .withColumn("prev_avg_hr", F.lag("avg_hr").over(patient_window))
-            .withColumn("prev_avg_hr_lag", F.lag("avg_hr", 2).over(patient_window))
-            .withColumn("prev_avg_rr", F.lag("avg_rr").over(patient_window))
-            .withColumn("prev_avg_rr_lag", F.lag("avg_rr", 2).over(patient_window))
-            .withColumn("prev_avg_map", F.lag("avg_map").over(patient_window))
-            .withColumn("prev_avg_map_lag", F.lag("avg_map", 2).over(patient_window))
-            .withColumn("prev_avg_spo2", F.lag("avg_spo2").over(patient_window))
-            .withColumn("prev_avg_spo2_lag", F.lag("avg_spo2", 2).over(patient_window))
-            .withColumn("prev_avg_hrv", F.lag("avg_hrv").over(patient_window))
-            .withColumn("prev_avg_hrv_lag", F.lag("avg_hrv", 2).over(patient_window))
-            .withColumn("prev_avg_pp", F.lag("avg_pp").over(patient_window))
-            .withColumn("hr_delta", F.col("avg_hr") - F.col("prev_avg_hr"))
-            .withColumn("map_delta", F.col("avg_map") - F.col("prev_avg_map"))
-            .withColumn("spo2_delta", F.col("avg_spo2") - F.col("prev_avg_spo2"))
-            .withColumn("hrv_delta", F.col("avg_hrv") - F.col("prev_avg_hrv"))
-            .withColumn(
-                "bmi_class",
-                F.when(F.col("Derived_BMI") < 18.5, "UNDERWEIGHT")
-                .when(F.col("Derived_BMI") < 25, "NORMAL")
-                .when(F.col("Derived_BMI") < 30, "OVERWEIGHT")
-                .otherwise("OBESE")
-            )
-            .withColumn(
-                "hr_pct",
-                F.when(
-                    (F.col("prev_avg_hr").isNull()) | (F.col("prev_avg_hr") == 0),
-                    None
-                ).otherwise(
-                    (F.col("avg_hr") - F.col("prev_avg_hr")) / F.col("prev_avg_hr") * 100
-                )
-            )
-            .withColumn(
-                "rr_pct",
-                F.when(
-                    (F.col("prev_avg_rr").isNull()) | (F.col("prev_avg_rr") == 0),
-                    None
-                ).otherwise(
-                    (F.col("avg_rr") - F.col("prev_avg_rr")) / F.col("prev_avg_rr") * 100
-                )
-            )   
-            .withColumn(
-                "spo2_pct",
-                F.when(
-                    (F.col("prev_avg_spo2").isNull()) | (F.col("prev_avg_spo2") == 0),
-                    None
-                ).otherwise(
-                    (F.col("avg_spo2") - F.col("prev_avg_spo2")) / F.col("prev_avg_spo2") * 100
-                )
-            )
-            .withColumn(
-                "pp_pct",
-                F.when(
-                    (F.col("prev_avg_pp").isNull()) | (F.col("prev_avg_pp") == 0),
-                    None
-                ).otherwise(
-                    (F.col("avg_pp") - F.col("prev_avg_pp")) / F.col("prev_avg_pp") * 100
-                )
-            )
-            .withColumn(
-                "map_pct",
-                F.when(
-                    (F.col("prev_avg_map").isNull()) | (F.col("prev_avg_map") == 0),
-                    None
-                ).otherwise(
-                    (F.col("avg_map") - F.col("prev_avg_map")) / F.col("prev_avg_map") * 100
-                )
-            )
-            .withColumn(
-                "progressive_hemo_deterioration",
-                F.when(
-                    (F.col("avg_hr") > F.col("prev_avg_hr")) &
-                    (F.col("prev_avg_hr") > F.col("prev_avg_hr_lag")) &
-                    (F.col("avg_map") < F.col("prev_avg_map")) &
-                    (F.col("prev_avg_map") < F.col("prev_avg_map_lag")),
-                    1
-                ).otherwise(0)
-            )
-            .withColumn(
-                "progressive_resp_failure_pattern",
-                F.when(
-                    (F.col("avg_rr") > F.col("prev_avg_rr")) &
-                    (F.col("prev_avg_rr") > F.col("prev_avg_rr_lag")) &
-                    (F.col("avg_spo2") < F.col("prev_avg_spo2")) &
-                    (F.col("prev_avg_spo2") < F.col("prev_avg_spo2_lag")),
-                    1
-                ).otherwise(0)
-            )
-            .withColumn(
-                "dynamic_sepsis_pattern",
-                F.when(
-                    (F.col("avg_temp") > 38) &
-                    (F.col("avg_hr") > F.col("prev_avg_hr")) &
-                    (F.col("prev_avg_hr") > F.col("prev_avg_hr_lag")) &
-                    (F.col("avg_hrv") < F.col("prev_avg_hrv")) &
-                    (F.col("prev_avg_hrv") < F.col("prev_avg_hrv_lag")),
-                    1
-                ).otherwise(0)
-            )
-            .withColumn(
-                "shock_index",
-                F.col("avg_hr") / F.col("avg_sbp")
-            )
-            .withColumn(
-                "modified_shock_index",
-                F.col("avg_hr") / F.col("avg_map")
-            )
-            .withColumn(
-                "age_index",
-                F.col("Age") * F.col("shock_index")
-            )
-            .withColumn(
-                "diastolic_shock_index",
-                F.col("avg_hr") / F.col("avg_dbp")
-            )
-            .withColumn(
-                "rate_pp",
-                F.col("avg_sbp") * F.col("avg_hr")
-            )
-            .withColumn(
-                "pp_index",
-                F.col("avg_pp") / F.col("avg_hr")
-            )       
-        )
-
-        for row in df_with_trend.collect():
-            updated_row = send_update(row)
+        rows = df_stats.collect()
+        # Ordina per paziente e poi per inizio finestra: un batch puo'
+        # contenere piu' righe per lo stesso paziente (finestre sovrapposte),
+        # e vanno processate in ordine cronologico per aggiornare
+        # correttamente il buffer di storico su Redis.
+        rows_sorted = sorted(rows, key=lambda r: (r["Patient ID"], r["window"].start))
+ 
+        for row in rows_sorted:
+            dict_row = compute_trend_row(row)
+            updated_row = send_update(Row(**dict_row))
             save_to_redis(updated_row)
-        logging.info(f"--- ANALISI TREND BATCH {batch_id} ---")
-
+ 
+        logging.info(f"--- ANALISI TREND BATCH {batch_id} (Redis history) ---")
+ 
 def start_streaming():
-
+ 
     df_stats_raw = (get_session().readStream 
         .format("redis")
         .option("redis.host", os.getenv("REDIS_HOST","redis"))  
@@ -286,7 +305,7 @@ def start_streaming():
     
     df_stats_raw = df_stats_raw.withColumn("Timestamp", col("Timestamp").cast("timestamp"))
     df_stats_raw = ensemble.classify(df_stats_raw)
-
+ 
     df_windowed = (
         df_stats_raw
         .withWatermark("Timestamp", "1 minute")
@@ -327,15 +346,16 @@ def start_streaming():
             F.count("*").alias("n_samples")
         )
         )
-
+ 
     query_stats = (df_windowed.writeStream
         .foreachBatch(batch_job_stats)
         .outputMode("update")
         .option("truncate", "false")
         .start()
     )
-
+ 
     return [query_stats]
+
 
 @router_streaming.get("/getseed")
 def get_seed():
@@ -381,7 +401,7 @@ from langchain_core.output_parsers import StrOutputParser
 def ask_llm(prompt:str) -> str:
     model = ChatGoogleGenerativeAI(
         model=GEMINI_API_MODEL, 
-        temperature=0.7,
+        temperature=0.4,
         api_key=GEMINI_API_KEY
     )
     

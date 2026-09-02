@@ -62,11 +62,11 @@ paramGrid = (ParamGridBuilder()
 
 evaluator = BinaryClassificationEvaluator(labelCol="RiskCategory_b",metricName="areaUnderROC")
 cv = CrossValidator(
-    estimator=pipe,           # Può essere il singolo modello o l'intera Pipeline
+    estimator=pipe,          
     estimatorParamMaps=paramGrid,
     evaluator=evaluator,
     parallelism=4,
-    numFolds=5                    # Divide i dati in 5 parti (5-fold cross validation)
+    numFolds=5                    
 )
 
 def get_poly_feature_names(base_features, degree=2):

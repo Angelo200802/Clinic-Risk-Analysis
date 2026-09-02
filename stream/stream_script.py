@@ -21,10 +21,9 @@ PROMPT = """Sei un generatore di dati sintetici stocastico per monitoraggio biom
 
 ## REGOLE DI GENERAZIONE
 1. **Variazione Casuale e Bidirezionale**: Per ogni parametro di input, l'algoritmo deve scegliere casualmente se il valore deve **salire o scendere**. Non deve esserci un trend unidirezionale; le statistiche devono poter diminuire tanto quanto aumentare.
-2. **Delta di Oscillazione**: Applica uno scostamento casuale (delta) compreso tra l'0% e il 5% del valore originale. Il segno (+ o -) di tale delta deve essere determinato in modo stocastico per ogni singola chiave del JSON.
+2. **Delta di Oscillazione**: Applica uno scostamento casuale (delta) compreso tra lo 0% e il 5% del valore originale. Il segno (+ o -) di tale delta deve essere determinato in modo stocastico per ogni singola chiave del JSON.
 3. **Indipendenza dei Parametri**: La variazione di un segnale non deve influenzare gli altri. Se la frequenza cardiaca sale, la pressione può scendere o restare stabile, senza alcuna coerenza clinica.
 4. **Limiti di Sicurezza**: Assicurati che i valori non diventino negativi e non superino i limiti fisiologici massimi (es. SpO2 max 100%).
-5. **IMPORTANTE** : Non devi seguire per forza il trend del paziente, puoi decidere se farlo peggiorare,migliorare o renderlo stabile, indipendentemente dalla storia clinica.
 
 ## VINCOLI DI OUTPUT (STRETTI)
 - Rispondi ESCLUSIVAMENTE con un oggetto JSON valido.
@@ -77,7 +76,7 @@ def compute_derived_metrics(vitals: dict) -> dict:
     return vitals
 
 def ask_llm(raw,report) -> dict:
-    model = ChatGoogleGenerativeAI(model=GEMINI_API_MODEL, temperature=0.7)
+    model = ChatGoogleGenerativeAI(model=GEMINI_API_MODEL, temperature=0.2)
     
     prompt = ChatPromptTemplate.from_template(PROMPT)
     chain = prompt | model | JsonOutputParser()
