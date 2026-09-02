@@ -103,7 +103,7 @@ async def generate_streaming_data():
             post_data(next)
         except Exception as e:
             logging.error(f"Failed to post data: {e}")
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
     
 if __name__ == "__main__":
     logging.log(logging.INFO, "Starting streaming data generation...")
