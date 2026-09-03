@@ -13,6 +13,7 @@ class Ensemble:
         F1_SCORE = "f1"
         PRECISION = "precision"
         ACCURACY = "accuracy"
+        AUROC = "auc_roc"
 
     def __init__(self,models : dict = None,weights_by: Weigth = Weigth.RECALL):
         self.models : dict[str, tuple[PipelineModel, float]] = {
