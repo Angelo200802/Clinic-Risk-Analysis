@@ -40,9 +40,8 @@ derived_index = (
         .withColumn(
             "Rate_Pressure_Product", 
             F.col("Heart Rate") * F.col("Systolic Blood Pressure")
-        )
+        ).cache()
 )
-derived_index.cache() 
 
 @router_clinic_query.get("/clinic/derived_indices")
 def get_derived_indices():
@@ -157,7 +156,7 @@ def get_k_nearest(fraction: float = 0.05, radius: float = 10.0):
             ds
             .withColumn("MAP_z", (F.col("Derived_MAP") - stats["map_mean"]) / stats["map_std"])
             .withColumn("HRV_z", (F.col("Derived_HRV") - stats["hrv_mean"]) / stats["hrv_std"])
-        )
+        ).cache()
 
         high_risk_center = (
             ds_std

@@ -117,14 +117,15 @@ def get_metrics_shock_risk():
 
 def metrics_shock_risk():
     if not 'evaluation_by_shock_risk' in _cache:
-        _cache['evaluation_by_shock_risk'] = (
-            evaluate_model(
-                predictions = ds.withColumn(
+        predictions = ds.withColumn(
                     "ShockRisk",
                     F.when(
                         (F.col("Heart Rate") / F.col("Systolic Blood Pressure")) > 0.85, 1.0 
                     ).otherwise(0.0)
-                ),
+                ).cache()
+        _cache['evaluation_by_shock_risk'] = (
+            evaluate_model(
+                predictions = predictions,
                 label="Risk Category",
                 predict_label="ShockRisk" 
             )
